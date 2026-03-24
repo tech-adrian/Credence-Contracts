@@ -148,7 +148,7 @@ pub fn create_batch_bonds(e: &Env, params_list: Vec<BatchBondParams>) -> BatchBo
             active: true,
             is_rolling: params.is_rolling,
             withdrawal_requested_at: 0,
-            notice_period: params.notice_period_duration,
+            notice_period_duration: params.notice_period_duration,
         };
 
         // Store the bond
