@@ -6,7 +6,6 @@ use soroban_sdk::{
 
 pub mod access_control;
 mod batch;
-mod early_exit_penalty;
 pub mod early_exit_penalty;
 mod emergency;
 mod events;
@@ -19,34 +18,25 @@ mod math;
 mod nonce;
 mod parameters;
 pub mod pausable;
-mod rolling_bond;
 pub mod rolling_bond;
-mod rolling_bond;
 #[allow(dead_code)]
 mod slash_history;
 #[allow(dead_code)]
 mod slashing;
-mod tiered_bond;
-mod tiered_bond;
 pub mod tiered_bond;
 mod token_integration;
 pub mod types;
-mod validation;
 mod validation;
 pub mod verifier;
 mod weighted_attestation;
 
 use crate::access_control::{
-    add_verifier_role, is_verifier, remove_verifier_role, require_admin, require_verifier,
-};
-use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Env, IntoVal, String, Symbol, Val, Vec,
+    add_verifier_role, is_verifier, remove_verifier_role, require_verifier,
 };
 
 use soroban_sdk::token::TokenClient;
 
 pub use evidence::{Evidence, EvidenceType};
-pub use types::Attestation;
 
 /// Identity tier based on bonded amount (Bronze < Silver < Gold < Platinum).
 #[contracttype]
@@ -71,7 +61,7 @@ pub struct IdentityBond {
     pub active: bool,
     pub is_rolling: bool,
     pub withdrawal_requested_at: u64,
-    pub notice_period: u64,
+    pub notice_period_duration: u64,
 }
 
 // Re-export batch types
@@ -368,14 +358,11 @@ impl CredenceBond {
 
     pub fn register_attester(e: Env, attester: Address) {
         pausable::require_not_paused(&e);
-        let _admin: Address = e
+        let admin: Address = e
             .storage()
             .instance()
             .get(&DataKey::Admin)
             .unwrap_or_else(|| panic!("not initialized"));
-        require_admin(&e, &_admin);
-        _admin.require_auth();
-        add_verifier_role(&e, &_admin, &attester);
         Self::require_admin_internal(&e, &admin);
         admin.require_auth();
         add_verifier_role(&e, &admin, &attester);
@@ -390,14 +377,11 @@ impl CredenceBond {
 
     pub fn unregister_attester(e: Env, attester: Address) {
         pausable::require_not_paused(&e);
-        let _admin: Address = e
+        let admin: Address = e
             .storage()
             .instance()
             .get(&DataKey::Admin)
             .unwrap_or_else(|| panic!("not initialized"));
-        require_admin(&e, &_admin);
-        _admin.require_auth();
-        remove_verifier_role(&e, &_admin, &attester);
         Self::require_admin_internal(&e, &admin);
         admin.require_auth();
         remove_verifier_role(&e, &admin, &attester);
@@ -552,12 +536,10 @@ impl CredenceBond {
             active: true,
             is_rolling,
             withdrawal_requested_at: 0,
-            notice_period,
+            notice_period_duration: notice_period_duration,
         };
         let key = DataKey::Bond;
         e.storage().instance().set(&key, &bond);
-
-        e.storage().instance().set(&DataKey::Bond, &bond);
 
         let old_tier = BondTier::Bronze;
         let new_tier = tiered_bond::get_tier_for_amount(net_amount);
@@ -645,7 +627,7 @@ impl CredenceBond {
             (id, attester, attestation_data),
         );
 
-        verifier::record_attestation_issued(&e, &attestation.verifier, attestation.weight);
+        verifier::record_attestation_issued(&e, &attestation.attester, 1);
 
         attestation
     }
@@ -686,7 +668,7 @@ impl CredenceBond {
             (attestation_id, attester),
         );
 
-        verifier::record_attestation_revoked(&e, &attestation.verifier, attestation.weight);
+        verifier::record_attestation_revoked(&e, &attestation.attester, 1);
     }
 
     pub fn get_attestation(e: Env, attestation_id: u64) -> Attestation {
@@ -923,33 +905,8 @@ impl CredenceBond {
         tiered_bond::get_tier_for_amount(bond.bonded_amount)
     }
 
-    /// Slash a portion of the bond. Increases slashed_amount up to the bonded_amount.
+    /// Slash a portion of the bond. Admin must be provided and authorized.
     /// Returns the updated bond with increased slashed_amount.
-    pub fn slash(e: Env, amount: i128) -> IdentityBond {
-        let key = DataKey::Bond;
-        let mut bond = e
-            .storage()
-            .instance()
-            .get::<_, IdentityBond>(&key)
-            .unwrap_or_else(|| panic!("no bond"));
-
-        // Calculate new slashed amount, checking for overflow
-        let new_slashed = bond
-            .slashed_amount
-            .checked_add(amount)
-            .expect("slashing caused overflow");
-
-        // Cap slashed amount at bonded amount
-        bond.slashed_amount = if new_slashed > bond.bonded_amount {
-            bond.bonded_amount
-        } else {
-            new_slashed
-        };
-
-        e.storage().instance().set(&key, &bond);
-        bond
-    }
-
     pub fn slash(e: Env, admin: Address, amount: i128) -> IdentityBond {
         admin.require_auth();
         Self::require_admin_internal(&e, &admin);
@@ -1347,10 +1304,6 @@ impl CredenceBond {
     // ==================== Protocol Parameters (Governance-Controlled) ====================
 
     // ==================== Reentrancy Test Functions ====================
-    /// Check if the reentrancy lock is currently held.
-    pub fn is_locked(e: Env) -> bool {
-        Self::check_lock(&e)
-    }
 
     /// Get protocol fee rate in basis points.
     pub fn get_protocol_fee_bps(e: Env) -> u32 {
@@ -1466,10 +1419,6 @@ impl CredenceBond {
             bond_duration: bond.bond_duration,
             slashed_amount: bond.slashed_amount,
             active: false,
-            // Add these missing fields:
-            is_rolling: false,
-            withdrawal_requested_at: 0,
-            notice_period: bond.notice_period,
             is_rolling: bond.is_rolling,
             withdrawal_requested_at: bond.withdrawal_requested_at,
             notice_period_duration: bond.notice_period_duration,
@@ -1537,10 +1486,6 @@ impl CredenceBond {
             bond_duration: bond.bond_duration,
             slashed_amount: new_slashed,
             active: bond.active,
-            // Add these missing fields:
-            is_rolling: false,
-            withdrawal_requested_at: 0,
-            notice_period: bond.notice_period,
             is_rolling: bond.is_rolling,
             withdrawal_requested_at: bond.withdrawal_requested_at,
             notice_period_duration: bond.notice_period_duration,
