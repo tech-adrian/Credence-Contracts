@@ -38,9 +38,11 @@ fn unauthorized_cannot_add_attestation() {
     let (client, _admin, user, attacker) = setup(&env);
 
     let fake = String::from_str(&env, "fake");
+    let contract_id = env.register(credence_bond::CredenceBond, ());
+    let deadline = env.ledger().timestamp() + 100_000;
     let nonce = client.get_nonce(&attacker);
 
-    client.add_attestation(&attacker, &user, &fake, &nonce);
+    client.add_attestation(&attacker, &user, &fake, &contract_id, &deadline, &nonce);
 }
 
 #[test]
@@ -51,8 +53,11 @@ fn authorized_attester_can_add_attestation() {
     client.register_attester(&attacker);
 
     let valid = String::from_str(&env, "valid");
+    // get the actual contract_id from the client
+    let contract_id = client.address.clone();
+    let deadline = env.ledger().timestamp() + 100_000;
     let nonce = client.get_nonce(&attacker);
-    let att = client.add_attestation(&attacker, &user, &valid, &nonce);
+    let att = client.add_attestation(&attacker, &user, &valid, &contract_id, &deadline, &nonce);
 
     assert_eq!(att.identity, user);
 }
@@ -66,13 +71,15 @@ fn wrong_attester_cannot_revoke() {
     client.register_attester(&attacker);
 
     let valid = String::from_str(&env, "valid");
+    let contract_id = client.address.clone();
+    let deadline = env.ledger().timestamp() + 100_000;
     let nonce = client.get_nonce(&attacker);
-    let att = client.add_attestation(&attacker, &user, &valid, &nonce);
+    let att = client.add_attestation(&attacker, &user, &valid, &contract_id, &deadline, &nonce);
 
     let other = Address::generate(&env);
     let other_nonce = client.get_nonce(&other);
 
-    client.revoke_attestation(&other, &att.id, &other_nonce);
+    client.revoke_attestation(&other, &att.id, &contract_id, &deadline, &other_nonce);
 }
 
 #[test]
@@ -80,7 +87,7 @@ fn owner_can_withdraw_bond() {
     let env = Env::default();
     let (client, _admin, user, _) = setup(&env);
 
-    client.create_bond(&user, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&user, &1000000_i128, &86400_u64, &false, &0_u64);
 
     // advance time past lock-up period
     env.ledger().with_mut(|l| {

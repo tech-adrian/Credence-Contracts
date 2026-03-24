@@ -2,11 +2,11 @@
 //!
 //! Tests the validation functions for bond amounts to ensure they properly enforce
 //! minimum and maximum limits.
-//! 
+//!
 
 #![cfg(test)]
 
-use super::validation::{validate_bond_amount, MIN_BOND_AMOUNT, MAX_BOND_AMOUNT};
+use super::validation::{validate_bond_amount, MAX_BOND_AMOUNT, MIN_BOND_AMOUNT};
 use super::{CredenceBond, CredenceBondClient};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env};
@@ -78,12 +78,12 @@ fn test_create_bond_with_valid_amount() {
     let e = Env::default();
     let (client, _admin) = setup(&e);
     let identity = Address::generate(&e);
-    
+
     // Test with minimum valid amount
     let bond = client.create_bond(&identity, &MIN_BOND_AMOUNT, &86400_u64);
     assert_eq!(bond.bonded_amount, MIN_BOND_AMOUNT);
     assert!(bond.active);
-    
+
     // Test with maximum valid amount
     let bond2 = client.create_bond(&identity, &MAX_BOND_AMOUNT, &86400_u64);
     assert_eq!(bond2.bonded_amount, MAX_BOND_AMOUNT);
@@ -96,7 +96,7 @@ fn test_create_bond_with_amount_below_minimum() {
     let e = Env::default();
     let (client, _admin) = setup(&e);
     let identity = Address::generate(&e);
-    
+
     client.create_bond(&identity, &(MIN_BOND_AMOUNT - 1), &86400_u64);
 }
 
@@ -106,7 +106,7 @@ fn test_create_bond_with_zero_amount() {
     let e = Env::default();
     let (client, _admin) = setup(&e);
     let identity = Address::generate(&e);
-    
+
     client.create_bond(&identity, &0_i128, &86400_u64);
 }
 
@@ -116,7 +116,7 @@ fn test_create_bond_with_negative_amount() {
     let e = Env::default();
     let (client, _admin) = setup(&e);
     let identity = Address::generate(&e);
-    
+
     client.create_bond(&identity, &(-1000_i128), &86400_u64);
 }
 
@@ -126,7 +126,7 @@ fn test_create_bond_with_amount_above_maximum() {
     let e = Env::default();
     let (client, _admin) = setup(&e);
     let identity = Address::generate(&e);
-    
+
     client.create_bond(&identity, &(MAX_BOND_AMOUNT + 1), &86400_u64);
 }
 
@@ -139,10 +139,10 @@ fn test_top_up_with_valid_amount() {
     let e = Env::default();
     let (client, _admin) = setup(&e);
     let identity = Address::generate(&e);
-    
+
     // Create initial bond
     client.create_bond(&identity, &MIN_BOND_AMOUNT, &86400_u64);
-    
+
     // Top up with valid amount
     let bond = client.top_up(&1000000); // 1 additional token
     assert_eq!(bond.bonded_amount, MIN_BOND_AMOUNT + 1000000);
@@ -155,10 +155,10 @@ fn test_top_up_with_zero_amount() {
     let e = Env::default();
     let (client, _admin) = setup(&e);
     let identity = Address::generate(&e);
-    
+
     // Create initial bond
     client.create_bond(&identity, &MIN_BOND_AMOUNT, &86400_u64);
-    
+
     // Try to top up with zero amount
     client.top_up(&0_i128);
 }
@@ -169,10 +169,10 @@ fn test_top_up_with_negative_amount() {
     let e = Env::default();
     let (client, _admin) = setup(&e);
     let identity = Address::generate(&e);
-    
+
     // Create initial bond
     client.create_bond(&identity, &MIN_BOND_AMOUNT, &86400_u64);
-    
+
     // Try to top up with negative amount
     client.top_up(&(-1000_i128));
 }
@@ -185,13 +185,13 @@ fn test_top_up_with_negative_amount() {
 fn test_boundary_values() {
     // Test exactly at minimum boundary
     validate_bond_amount(MIN_BOND_AMOUNT);
-    
+
     // Test exactly at maximum boundary
     validate_bond_amount(MAX_BOND_AMOUNT);
-    
+
     // Test just above minimum
     validate_bond_amount(MIN_BOND_AMOUNT + 1);
-    
+
     // Test just below maximum
     validate_bond_amount(MAX_BOND_AMOUNT - 1);
 }
@@ -207,7 +207,9 @@ fn test_error_message_includes_amount_and_minimum() {
 }
 
 #[test]
-#[should_panic(expected = "bond amount exceeds maximum allowed: 100000000000001 (maximum: 100000000000000)")]
+#[should_panic(
+    expected = "bond amount exceeds maximum allowed: 100000000000001 (maximum: 100000000000000)"
+)]
 fn test_error_message_includes_amount_and_maximum() {
     validate_bond_amount(MAX_BOND_AMOUNT + 1);
 }
@@ -221,15 +223,15 @@ fn test_create_bond_then_top_up_valid_scenario() {
     let e = Env::default();
     let (client, _admin) = setup(&e);
     let identity = Address::generate(&e);
-    
+
     // Create bond with minimum amount
     let bond = client.create_bond(&identity, &MIN_BOND_AMOUNT, &86400_u64);
     assert_eq!(bond.bonded_amount, MIN_BOND_AMOUNT);
-    
+
     // Top up with valid amount
     let bond = client.top_up(&1000000); // 1 additional token
     assert_eq!(bond.bonded_amount, MIN_BOND_AMOUNT + 1000000);
-    
+
     // Top up again with another valid amount
     let bond = client.top_up(&5000000); // 5 additional tokens
     assert_eq!(bond.bonded_amount, MIN_BOND_AMOUNT + 1000000 + 5000000);
@@ -241,10 +243,10 @@ fn test_create_bond_with_min_amount_then_invalid_top_up() {
     let e = Env::default();
     let (client, _admin) = setup(&e);
     let identity = Address::generate(&e);
-    
+
     // Create bond with minimum amount
     client.create_bond(&identity, &MIN_BOND_AMOUNT, &86400_u64);
-    
+
     // Try to top up with zero (should fail)
     client.top_up(&0_i128);
 }

@@ -27,7 +27,7 @@ fn test_lifecycle_create_then_withdraw() {
     let (client, _admin, identity) = setup(&e);
     let amount = 1000_i128;
     let duration = 86400_u64;
-    client.create_bond(&identity, &amount, &duration, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &amount, &duration, &false, &0_u64);
     let state = client.get_identity_state();
     assert_eq!(state.bonded_amount, amount);
     assert_eq!(state.slashed_amount, 0);
@@ -47,7 +47,7 @@ fn test_lifecycle_create_topup_withdraw() {
     let e = Env::default();
     let (client, _admin, identity) = setup(&e);
     let duration = 86400_u64;
-    client.create_bond(&identity, &500_i128, &duration, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &500000_i128, &duration, &false, &0_u64);
     let after_topup = client.top_up(&300_i128);
     assert_eq!(after_topup.bonded_amount, 800);
 
@@ -64,7 +64,7 @@ fn test_lifecycle_slash_then_withdraw_remaining() {
     let e = Env::default();
     let (client, admin, identity) = setup(&e);
     let duration = 86400_u64;
-    client.create_bond(&identity, &1000_i128, &duration, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &duration, &false, &0_u64);
     let after_slash = client.slash(&admin, &400_i128);
     assert_eq!(after_slash.slashed_amount, 400);
     assert_eq!(after_slash.bonded_amount, 1000);
@@ -83,7 +83,7 @@ fn test_lifecycle_create_topup_slash_withdraw() {
     let e = Env::default();
     let (client, admin, identity) = setup(&e);
     let duration = 86400_u64;
-    client.create_bond(&identity, &1000_i128, &duration, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &duration, &false, &0_u64);
     client.top_up(&500_i128);
     client.slash(&admin, &300_i128);
     let state = client.get_identity_state();
@@ -103,7 +103,7 @@ fn test_lifecycle_state_consistency() {
     let e = Env::default();
     let (client, admin, identity) = setup(&e);
     let duration = 86400_u64;
-    client.create_bond(&identity, &2000_i128, &duration, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &2000000_i128, &duration, &false, &0_u64);
     let s1 = client.get_identity_state();
     let s2 = client.get_identity_state();
     assert_eq!(s1.bonded_amount, s2.bonded_amount);
@@ -127,7 +127,7 @@ fn test_lifecycle_state_consistency() {
 fn test_lifecycle_extend_duration() {
     let e = Env::default();
     let (client, _admin, identity) = setup(&e);
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     let before = client.get_identity_state();
     client.extend_duration(&86400_u64);
     let after = client.get_identity_state();

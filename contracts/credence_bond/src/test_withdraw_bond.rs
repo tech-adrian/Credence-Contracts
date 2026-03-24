@@ -18,7 +18,7 @@ fn test_withdraw_bond_after_lockup_non_rolling() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let (client, _admin, identity, _token_id, _bond_id) = setup_with_token(&e);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
 
     e.ledger().with_mut(|li| li.timestamp = 87401);
     let bond = client.withdraw_bond(&500);
@@ -32,7 +32,7 @@ fn test_withdraw_bond_before_lockup_panics() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let (client, _admin, identity, _token_id, _bond_id) = setup_with_token(&e);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
 
     e.ledger().with_mut(|li| li.timestamp = 44200);
     client.withdraw_bond(&500);
@@ -45,7 +45,7 @@ fn test_withdraw_bond_rolling_before_notice_panics() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let (client, _admin, identity, _token_id, _bond_id) = setup_with_token(&e);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &true, &10_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &true, &10_u64);
     e.ledger().with_mut(|li| li.timestamp = 1101);
 
     client.withdraw_bond(&500);
@@ -58,7 +58,7 @@ fn test_withdraw_bond_rolling_before_cooldown_panics() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let (client, _admin, identity, _token_id, _bond_id) = setup_with_token(&e);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &true, &10_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &true, &10_u64);
     client.request_withdrawal();
     e.ledger().with_mut(|li| li.timestamp = 1005);
 
@@ -71,7 +71,7 @@ fn test_withdraw_bond_rolling_after_cooldown() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let (client, _admin, identity, _token_id, _bond_id) = setup_with_token(&e);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &true, &10_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &true, &10_u64);
     client.request_withdrawal();
     e.ledger().with_mut(|li| li.timestamp = 1011);
 
@@ -85,7 +85,7 @@ fn test_withdraw_bond_partial_withdrawal() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let (client, _admin, identity, _token_id, _bond_id) = setup_with_token(&e);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     e.ledger().with_mut(|li| li.timestamp = 87401);
 
     let bond = client.withdraw_bond(&300);
@@ -103,7 +103,7 @@ fn test_withdraw_bond_insufficient_balance() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let (client, _admin, identity, _token_id, _bond_id) = setup_with_token(&e);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     e.ledger().with_mut(|li| li.timestamp = 87401);
 
     client.withdraw_bond(&1001);
@@ -115,7 +115,7 @@ fn test_withdraw_bond_after_slash() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let (client, admin, identity, _token_id, _bond_id) = setup_with_token(&e);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     client.slash(&admin, &400);
     e.ledger().with_mut(|li| li.timestamp = 87401);
 
@@ -130,7 +130,7 @@ fn test_withdraw_bond_zero_amount() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let (client, _admin, identity, _token_id, _bond_id) = setup_with_token(&e);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     e.ledger().with_mut(|li| li.timestamp = 87401);
 
     let bond = client.withdraw_bond(&0);
@@ -143,7 +143,7 @@ fn test_withdraw_bond_full_withdrawal() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let (client, _admin, identity, token_id, bond_contract_id) = setup_with_token(&e);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     e.ledger().with_mut(|li| li.timestamp = 87401);
 
     let bond = client.withdraw_bond(&1000);
@@ -160,7 +160,7 @@ fn test_withdraw_alias_calls_withdraw_bond() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let (client, _admin, identity, _token_id, _bond_id) = setup_with_token(&e);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     e.ledger().with_mut(|li| li.timestamp = 87401);
 
     let bond = client.withdraw(&500);
