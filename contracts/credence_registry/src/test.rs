@@ -34,7 +34,7 @@ fn test_initialize() {
 }
 
 #[test]
-#[should_panic(expected = "already initialized")]
+#[should_panic(expected = "Error(Contract, #2)")]
 fn test_initialize_twice_should_fail() {
     let env = Env::default();
     let admin = Address::generate(&env);
@@ -66,7 +66,7 @@ fn test_register_identity() {
 }
 
 #[test]
-#[should_panic(expected = "identity already registered")]
+#[should_panic(expected = "Error(Contract, #400)")]
 fn test_register_duplicate_identity() {
     let (env, contract_id, _admin) = setup_registry();
     let client = CredenceRegistryClient::new(&env, &contract_id);
@@ -82,7 +82,7 @@ fn test_register_duplicate_identity() {
 }
 
 #[test]
-#[should_panic(expected = "bond contract already registered")]
+#[should_panic(expected = "Error(Contract, #401)")]
 fn test_register_duplicate_bond_contract() {
     let (env, contract_id, _admin) = setup_registry();
     let client = CredenceRegistryClient::new(&env, &contract_id);
@@ -115,7 +115,7 @@ fn test_get_bond_contract() {
 }
 
 #[test]
-#[should_panic(expected = "identity not registered")]
+#[should_panic(expected = "Error(Contract, #402)")]
 fn test_get_bond_contract_not_registered() {
     let (env, contract_id, _admin) = setup_registry();
     let client = CredenceRegistryClient::new(&env, &contract_id);
@@ -142,7 +142,7 @@ fn test_get_identity_reverse_lookup() {
 }
 
 #[test]
-#[should_panic(expected = "bond contract not registered")]
+#[should_panic(expected = "Error(Contract, #403)")]
 fn test_get_identity_not_registered() {
     let (env, contract_id, _admin) = setup_registry();
     let client = CredenceRegistryClient::new(&env, &contract_id);
@@ -194,7 +194,7 @@ fn test_deactivate() {
 }
 
 #[test]
-#[should_panic(expected = "already deactivated")]
+#[should_panic(expected = "Error(Contract, #404)")]
 fn test_deactivate_twice() {
     let (env, contract_id, _admin) = setup_registry();
     let client = CredenceRegistryClient::new(&env, &contract_id);
@@ -231,7 +231,7 @@ fn test_reactivate() {
 }
 
 #[test]
-#[should_panic(expected = "already active")]
+#[should_panic(expected = "Error(Contract, #405)")]
 fn test_reactivate_already_active() {
     let (env, contract_id, _admin) = setup_registry();
     let client = CredenceRegistryClient::new(&env, &contract_id);

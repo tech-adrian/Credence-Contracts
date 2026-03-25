@@ -21,10 +21,6 @@ mod nonce;
 mod parameters;
 pub mod pausable;
 mod rolling_bond;
-#[allow(dead_code)]
-mod slash_history;
-#[allow(dead_code)]
-mod slashing;
 mod tiered_bond;
 mod token_integration;
 pub mod types;
@@ -75,7 +71,6 @@ pub struct CooldownRequest {
 pub enum DataKey {
     Admin,
     Bond,
-    Token,
     Attester(Address),
     Attestation(u64),
     AttestationCounter,
@@ -279,6 +274,7 @@ impl CredenceBond {
         emergency::get_record(&e, id)
     }
 
+    /// Register an authorized attester (only admin can call).
     pub fn register_attester(e: Env, attester: Address) {
         pausable::require_not_paused(&e);
         let admin: Address = e
@@ -297,6 +293,7 @@ impl CredenceBond {
             .publish((Symbol::new(&e, "attester_registered"),), attester);
     }
 
+    /// Remove an attester's authorization (only admin can call).
     pub fn unregister_attester(e: Env, attester: Address) {
         pausable::require_not_paused(&e);
         let admin: Address = e
@@ -312,6 +309,7 @@ impl CredenceBond {
             .publish((Symbol::new(&e, "attester_unregistered"),), attester);
     }
 
+    /// Check if an address is an authorized attester.
     pub fn is_attester(e: Env, attester: Address) -> bool {
         is_verifier(&e, &attester)
     }
@@ -411,7 +409,7 @@ impl CredenceBond {
         }
         let bond = IdentityBond {
             identity: identity.clone(),
-            bonded_amount: net_amount,
+            bonded_amount: amount,
             bond_start,
             bond_duration: duration,
             slashed_amount: 0,
@@ -428,6 +426,7 @@ impl CredenceBond {
         bond
     }
 
+    /// Return current bond state for an identity (simplified: single bond per contract instance).
     pub fn get_identity_state(e: Env) -> IdentityBond {
         e.storage()
             .instance()
@@ -538,6 +537,7 @@ impl CredenceBond {
         );
     }
 
+    /// Get an attestation by ID.
     pub fn get_attestation(e: Env, attestation_id: u64) -> Attestation {
         e.storage()
             .instance()
@@ -614,7 +614,7 @@ impl CredenceBond {
         let old_tier = tiered_bond::get_tier_for_amount(bond.bonded_amount);
         bond.bonded_amount = bond.bonded_amount.checked_sub(amount).expect("underflow");
         if bond.slashed_amount > bond.bonded_amount {
-            bond.slashed_amount = bond.bonded_amount;
+            panic!("slashed amount exceeds bonded amount");
         }
         let new_tier = tiered_bond::get_tier_for_amount(bond.bonded_amount);
         tiered_bond::emit_tier_change_if_needed(&e, &bond.identity, old_tier, new_tier);
@@ -668,19 +668,17 @@ impl CredenceBond {
         let new_tier = tiered_bond::get_tier_for_amount(bond.bonded_amount);
         tiered_bond::emit_tier_change_if_needed(&e, &bond.identity, old_tier, new_tier);
         e.storage().instance().set(&key, &bond);
-        events::emit_bond_withdrawn(&e, &bond.identity, amount, bond.bonded_amount);
         bond
     }
 
+    /// Request withdrawal (rolling bonds). Withdrawal allowed after notice period.
     pub fn request_withdrawal(e: Env) -> IdentityBond {
-        pausable::require_not_paused(&e);
         let key = DataKey::Bond;
-        let mut bond: IdentityBond = e
+        let mut bond = e
             .storage()
             .instance()
-            .get(&key)
+            .get::<_, IdentityBond>(&key)
             .unwrap_or_else(|| panic!("no bond"));
-        bond.identity.require_auth();
         if !bond.is_rolling {
             panic!("not a rolling bond");
         }
@@ -696,12 +694,13 @@ impl CredenceBond {
         bond
     }
 
+    /// If bond is rolling and period has ended, renew (new period start = now). Emits renewal event.
     pub fn renew_if_rolling(e: Env) -> IdentityBond {
         let key = DataKey::Bond;
-        let mut bond: IdentityBond = e
+        let mut bond = e
             .storage()
             .instance()
-            .get(&key)
+            .get::<_, IdentityBond>(&key)
             .unwrap_or_else(|| panic!("no bond"));
         if !bond.is_rolling {
             return bond;
@@ -719,6 +718,7 @@ impl CredenceBond {
         bond
     }
 
+    /// Get current tier for the bond's bonded amount.
     pub fn get_tier(e: Env) -> BondTier {
         let bond = Self::get_identity_state(e);
         tiered_bond::get_tier_for_amount(bond.bonded_amount)
@@ -745,21 +745,14 @@ impl CredenceBond {
         governance_approval::initialize_governance(&e, governors, quorum_bps, min_governors);
     }
 
-    pub fn propose_slash(e: Env, proposer: Address, amount: i128) -> u64 {
-        pausable::require_not_paused(&e);
-        proposer.require_auth();
-        let admin: Address = e
+    /// Top up the bond with additional amount (checks for overflow)
+    pub fn top_up(e: Env, amount: i128) -> IdentityBond {
+        let key = DataKey::Bond;
+        let mut bond = e
             .storage()
             .instance()
-            .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("not initialized"));
-        let governors = governance_approval::get_governors(&e);
-        let is_governor = governors.iter().any(|g| g == proposer);
-        if proposer != admin && !is_governor {
-            panic!("not admin or governor");
-        }
-        governance_approval::propose_slash(&e, &proposer, amount)
-    }
+            .get::<_, IdentityBond>(&key)
+            .unwrap_or_else(|| panic!("no bond"));
 
     pub fn governance_vote(e: Env, voter: Address, proposal_id: u64, approve: bool) {
         pausable::require_not_paused(&e);
@@ -912,10 +905,10 @@ impl CredenceBond {
 
     pub fn extend_duration(e: Env, additional_duration: u64) -> IdentityBond {
         let key = DataKey::Bond;
-        let mut bond: IdentityBond = e
+        let mut bond = e
             .storage()
             .instance()
-            .get(&key)
+            .get::<_, IdentityBond>(&key)
             .unwrap_or_else(|| panic!("no bond"));
         bond.identity.require_auth();
         bond.bond_duration = bond
@@ -1043,7 +1036,7 @@ impl CredenceBond {
             active: false,
             is_rolling: bond.is_rolling,
             withdrawal_requested_at: bond.withdrawal_requested_at,
-            notice_period_duration: bond.notice_period_duration,
+            notice_period: bond.notice_period,
         };
         e.storage().instance().set(&bond_key, &updated);
         let cb_key = Symbol::new(&e, "callback");
@@ -1058,9 +1051,6 @@ impl CredenceBond {
 
     pub fn slash_bond(e: Env, admin: Address, slash_amount: i128) -> i128 {
         admin.require_auth();
-        if slash_amount < 0 {
-            panic!("slash amount must be non-negative");
-        }
         Self::acquire_lock(&e);
         let stored_admin: Address = e
             .storage()
@@ -1098,7 +1088,7 @@ impl CredenceBond {
             active: bond.active,
             is_rolling: bond.is_rolling,
             withdrawal_requested_at: bond.withdrawal_requested_at,
-            notice_period_duration: bond.notice_period_duration,
+            notice_period: bond.notice_period,
         };
         e.storage().instance().set(&bond_key, &updated);
         let cb_key = Symbol::new(&e, "callback");

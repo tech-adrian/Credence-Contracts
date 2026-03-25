@@ -88,6 +88,16 @@ pub enum ContractError {
     /// Contracts: treasury
     UnauthorizedDepositor = 105,
 
+    /// Contract is currently paused and does not allow state mutations.
+    /// Replaces: panic!("contract is paused")
+    /// Contracts: bond, registry, treasury
+    ContractPaused = 106,
+
+    /// Pause proposal action value is invalid.
+    /// Replaces: panic!("invalid pause action")
+    /// Contracts: registry, treasury
+    InvalidPauseAction = 107,
+
     // --- Bond (200-299) ---
     /// No bond exists for the given address or key.
     /// Replaces: panic!("no bond")
@@ -288,7 +298,9 @@ impl ErrorExt for ContractError {
             | ContractError::UnauthorizedAttester
             | ContractError::NotOriginalAttester
             | ContractError::NotSigner
-            | ContractError::UnauthorizedDepositor => ErrorCategory::Authorization,
+            | ContractError::UnauthorizedDepositor
+            | ContractError::ContractPaused
+            | ContractError::InvalidPauseAction => ErrorCategory::Authorization,
 
             ContractError::BondNotFound
             | ContractError::BondNotActive
@@ -343,6 +355,8 @@ impl ErrorExt for ContractError {
             ContractError::UnauthorizedDepositor => {
                 "Caller is neither admin nor an authorized depositor"
             }
+            ContractError::ContractPaused => "Contract is paused",
+            ContractError::InvalidPauseAction => "Pause proposal action is invalid",
             ContractError::BondNotFound => "No bond found for the given key",
             ContractError::BondNotActive => "Bond is not in an active state",
             ContractError::InsufficientBalance => "Insufficient balance for withdrawal",

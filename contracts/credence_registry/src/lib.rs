@@ -19,6 +19,8 @@
 //! - emits events for audit trail
 
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, Vec};
+use credence_errors::ContractError;
+use soroban_sdk::panic_with_error;
 pub mod idempotency;
 /// Represents a registry entry mapping an identity to their bond contract
 #[contracttype]
@@ -68,7 +70,7 @@ impl CredenceRegistry {
     /// * If contract is already initialized
     pub fn initialize(e: Env, admin: Address) {
         if e.storage().instance().has(&DataKey::Admin) {
-            panic!("already initialized");
+            panic_with_error!(&e, ContractError::AlreadyInitialized);
         }
 
         admin.require_auth();
@@ -116,20 +118,20 @@ impl CredenceRegistry {
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("not initialized"));
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotInitialized));
 
         admin.require_auth();
 
         // Check if identity is already registered
         let identity_key = DataKey::IdentityToBond(identity.clone());
         if e.storage().instance().has(&identity_key) {
-            panic!("identity already registered");
+            panic_with_error!(&e, ContractError::IdentityAlreadyRegistered);
         }
 
         // Check if bond contract is already associated with another identity
         let bond_key = DataKey::BondToIdentity(bond_contract.clone());
         if e.storage().instance().has(&bond_key) {
-            panic!("bond contract already registered");
+            panic_with_error!(&e, ContractError::BondContractAlreadyRegistered);
         }
 
         // Create registry entry
@@ -180,7 +182,7 @@ impl CredenceRegistry {
         e.storage()
             .instance()
             .get(&key)
-            .unwrap_or_else(|| panic!("identity not registered"))
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::IdentityNotRegistered))
     }
 
     /// Reverse lookup: get the identity for a given bond contract.
@@ -198,7 +200,7 @@ impl CredenceRegistry {
         e.storage()
             .instance()
             .get(&key)
-            .unwrap_or_else(|| panic!("bond contract not registered"))
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::BondContractNotRegistered))
     }
 
     /// Check if an identity is registered.
@@ -235,7 +237,7 @@ impl CredenceRegistry {
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("not initialized"));
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotInitialized));
 
         admin.require_auth();
 
@@ -244,10 +246,10 @@ impl CredenceRegistry {
             .storage()
             .instance()
             .get(&key)
-            .unwrap_or_else(|| panic!("identity not registered"));
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::IdentityNotRegistered));
 
         if !entry.active {
-            panic!("already deactivated");
+            panic_with_error!(&e, ContractError::AlreadyDeactivated);
         }
 
         entry.active = false;
@@ -276,7 +278,7 @@ impl CredenceRegistry {
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("not initialized"));
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotInitialized));
 
         admin.require_auth();
 
@@ -285,10 +287,10 @@ impl CredenceRegistry {
             .storage()
             .instance()
             .get(&key)
-            .unwrap_or_else(|| panic!("identity not registered"));
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::IdentityNotRegistered));
 
         if entry.active {
-            panic!("already active");
+            panic_with_error!(&e, ContractError::AlreadyActive);
         }
 
         entry.active = true;
@@ -320,7 +322,7 @@ impl CredenceRegistry {
         e.storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("not initialized"))
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotInitialized))
     }
 
     /// Transfer admin rights to a new address.
@@ -340,7 +342,7 @@ impl CredenceRegistry {
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("not initialized"));
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotInitialized));
 
         admin.require_auth();
 

@@ -3,7 +3,8 @@
 //! Manages protocol fees and slashed funds with multi-signature withdrawal support.
 //! Tracks fund sources (protocol fees vs slashed funds) and emits treasury events.
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol};
+use credence_errors::ContractError;
+use soroban_sdk::{contract, contractimpl, contracttype, panic_with_error, Address, Env, Symbol};
 
 use crate::pausable;
 
@@ -110,32 +111,34 @@ impl CredenceTreasury {
         pausable::require_not_paused(&e);
         from.require_auth();
         if amount <= 0 {
-            panic!("amount must be positive");
+            panic_with_error!(&e, ContractError::AmountMustBePositive);
         }
         let admin: Address = e
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("not initialized"));
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotInitialized));
         let is_depositor = e
             .storage()
             .instance()
             .get(&DataKey::Depositor(from.clone()))
             .unwrap_or(false);
         if from != admin && !is_depositor {
-            panic!("only admin or authorized depositor can receive_fee");
+            panic_with_error!(&e, ContractError::UnauthorizedDepositor);
         }
         let total: i128 = e
             .storage()
             .instance()
             .get(&DataKey::TotalBalance)
             .unwrap_or(0);
-        let new_total = total.checked_add(amount).expect("total balance overflow");
+        let new_total = total
+            .checked_add(amount)
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::Overflow));
         let key_source = DataKey::BalanceBySource(source);
         let source_balance: i128 = e.storage().instance().get(&key_source).unwrap_or(0);
         let new_source = source_balance
             .checked_add(amount)
-            .expect("source balance overflow");
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::Overflow));
         e.storage()
             .instance()
             .set(&DataKey::TotalBalance, &new_total);
@@ -155,7 +158,7 @@ impl CredenceTreasury {
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("not initialized"));
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotInitialized));
         admin.require_auth();
         e.storage()
             .instance()
@@ -171,7 +174,7 @@ impl CredenceTreasury {
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("not initialized"));
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotInitialized));
         admin.require_auth();
         e.storage()
             .instance()
@@ -187,7 +190,7 @@ impl CredenceTreasury {
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("not initialized"));
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotInitialized));
         admin.require_auth();
         let already = e
             .storage()
@@ -205,7 +208,9 @@ impl CredenceTreasury {
             .instance()
             .get(&DataKey::SignerCount)
             .unwrap_or(0);
-        let new_count = count.checked_add(1).expect("signer count overflow");
+        let new_count = count
+            .checked_add(1)
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::Overflow));
         e.storage()
             .instance()
             .set(&DataKey::SignerCount, &new_count);
@@ -220,7 +225,7 @@ impl CredenceTreasury {
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("not initialized"));
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotInitialized));
         admin.require_auth();
         let exists = e
             .storage()
@@ -257,7 +262,7 @@ impl CredenceTreasury {
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("not initialized"));
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotInitialized));
         admin.require_auth();
         let count: u32 = e
             .storage()
@@ -265,7 +270,7 @@ impl CredenceTreasury {
             .get(&DataKey::SignerCount)
             .unwrap_or(0);
         if threshold > count {
-            panic!("threshold cannot exceed signer count");
+            panic_with_error!(&e, ContractError::ThresholdExceedsSigners);
         }
         e.storage().instance().set(&DataKey::Threshold, &threshold);
         e.events()
@@ -283,10 +288,10 @@ impl CredenceTreasury {
             .get(&DataKey::Signer(proposer.clone()))
             .unwrap_or(false);
         if !is_signer {
-            panic!("only signer can propose withdrawal");
+            panic_with_error!(&e, ContractError::NotSigner);
         }
         if amount <= 0 {
-            panic!("amount must be positive");
+            panic_with_error!(&e, ContractError::AmountMustBePositive);
         }
         let total: i128 = e
             .storage()
@@ -294,14 +299,16 @@ impl CredenceTreasury {
             .get(&DataKey::TotalBalance)
             .unwrap_or(0);
         if amount > total {
-            panic!("insufficient treasury balance");
+            panic_with_error!(&e, ContractError::InsufficientTreasuryBalance);
         }
         let id: u64 = e
             .storage()
             .instance()
             .get(&DataKey::ProposalCounter)
             .unwrap_or(0);
-        let next_id = id.checked_add(1).expect("proposal counter overflow");
+        let next_id = id
+            .checked_add(1)
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::Overflow));
         e.storage()
             .instance()
             .set(&DataKey::ProposalCounter, &next_id);
@@ -335,15 +342,15 @@ impl CredenceTreasury {
             .get(&DataKey::Signer(approver.clone()))
             .unwrap_or(false);
         if !is_signer {
-            panic!("only signer can approve");
+            panic_with_error!(&e, ContractError::NotSigner);
         }
         let proposal: WithdrawalProposal = e
             .storage()
             .instance()
             .get(&DataKey::Proposal(proposal_id))
-            .unwrap_or_else(|| panic!("proposal not found"));
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::ProposalNotFound));
         if proposal.executed {
-            panic!("proposal already executed");
+            panic_with_error!(&e, ContractError::ProposalAlreadyExecuted);
         }
         let already = e
             .storage()
@@ -361,7 +368,9 @@ impl CredenceTreasury {
             .instance()
             .get(&DataKey::ApprovalCount(proposal_id))
             .unwrap_or(0);
-        let new_count = count.checked_add(1).expect("approval count overflow");
+        let new_count = count
+            .checked_add(1)
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::Overflow));
         e.storage()
             .instance()
             .set(&DataKey::ApprovalCount(proposal_id), &new_count);
@@ -378,9 +387,9 @@ impl CredenceTreasury {
             .storage()
             .instance()
             .get(&DataKey::Proposal(proposal_id))
-            .unwrap_or_else(|| panic!("proposal not found"));
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::ProposalNotFound));
         if proposal.executed {
-            panic!("proposal already executed");
+            panic_with_error!(&e, ContractError::ProposalAlreadyExecuted);
         }
         let threshold: u32 = e.storage().instance().get(&DataKey::Threshold).unwrap_or(0);
         let approvals: u32 = e
@@ -389,7 +398,7 @@ impl CredenceTreasury {
             .get(&DataKey::ApprovalCount(proposal_id))
             .unwrap_or(0);
         if approvals < threshold {
-            panic!("insufficient approvals to execute");
+            panic_with_error!(&e, ContractError::InsufficientApprovals);
         }
         let total: i128 = e
             .storage()
@@ -397,11 +406,11 @@ impl CredenceTreasury {
             .get(&DataKey::TotalBalance)
             .unwrap_or(0);
         if total < proposal.amount {
-            panic!("insufficient treasury balance");
+            panic_with_error!(&e, ContractError::InsufficientTreasuryBalance);
         }
         let new_total = total
             .checked_sub(proposal.amount)
-            .expect("withdrawal underflow");
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::Underflow));
         e.storage()
             .instance()
             .set(&DataKey::TotalBalance, &new_total);
@@ -436,7 +445,7 @@ impl CredenceTreasury {
         e.storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("not initialized"))
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotInitialized))
     }
 
     /// Check if an address is an authorized depositor.
@@ -465,7 +474,7 @@ impl CredenceTreasury {
         e.storage()
             .instance()
             .get(&DataKey::Proposal(proposal_id))
-            .unwrap_or_else(|| panic!("proposal not found"))
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::ProposalNotFound))
     }
 
     /// Get approval count for a proposal.

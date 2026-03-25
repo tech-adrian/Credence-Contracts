@@ -40,7 +40,7 @@ fn test_receive_fee_as_admin() {
 }
 
 #[test]
-#[should_panic(expected = "total balance overflow")]
+#[should_panic(expected = "Error(Contract, #700)")]
 fn test_receive_fee_overflow_panics() {
     let e = Env::default();
     let (client, admin) = setup(&e);
@@ -62,7 +62,7 @@ fn test_receive_fee_as_depositor() {
 }
 
 #[test]
-#[should_panic(expected = "only admin or authorized depositor can receive_fee")]
+#[should_panic(expected = "Error(Contract, #105)")]
 fn test_receive_fee_unauthorized() {
     let e = Env::default();
     let (client, _admin) = setup(&e);
@@ -71,7 +71,7 @@ fn test_receive_fee_unauthorized() {
 }
 
 #[test]
-#[should_panic(expected = "amount must be positive")]
+#[should_panic(expected = "Error(Contract, #600)")]
 fn test_receive_fee_zero_amount() {
     let e = Env::default();
     let (client, admin) = setup(&e);
@@ -79,7 +79,7 @@ fn test_receive_fee_zero_amount() {
 }
 
 #[test]
-#[should_panic(expected = "amount must be positive")]
+#[should_panic(expected = "Error(Contract, #600)")]
 fn test_receive_fee_negative_amount() {
     let e = Env::default();
     let (client, admin) = setup(&e);
@@ -104,7 +104,7 @@ fn test_add_remove_signer_and_threshold() {
 }
 
 #[test]
-#[should_panic(expected = "threshold cannot exceed signer count")]
+#[should_panic(expected = "Error(Contract, #601)")]
 fn test_set_threshold_exceeds_signers() {
     let e = Env::default();
     let (client, _admin) = setup(&e);
@@ -142,7 +142,7 @@ fn test_propose_approve_execute_withdrawal() {
 }
 
 #[test]
-#[should_panic(expected = "only signer can propose withdrawal")]
+#[should_panic(expected = "Error(Contract, #104)")]
 fn test_propose_withdrawal_non_signer() {
     let e = Env::default();
     let (client, admin) = setup(&e);
@@ -153,7 +153,7 @@ fn test_propose_withdrawal_non_signer() {
 }
 
 #[test]
-#[should_panic(expected = "amount must be positive")]
+#[should_panic(expected = "Error(Contract, #600)")]
 fn test_propose_withdrawal_zero_amount() {
     let e = Env::default();
     let (client, admin) = setup(&e);
@@ -166,7 +166,7 @@ fn test_propose_withdrawal_zero_amount() {
 }
 
 #[test]
-#[should_panic(expected = "insufficient treasury balance")]
+#[should_panic(expected = "Error(Contract, #602)")]
 fn test_propose_withdrawal_exceeds_balance() {
     let e = Env::default();
     let (client, admin) = setup(&e);
@@ -179,7 +179,7 @@ fn test_propose_withdrawal_exceeds_balance() {
 }
 
 #[test]
-#[should_panic(expected = "only signer can approve")]
+#[should_panic(expected = "Error(Contract, #104)")]
 fn test_approve_withdrawal_non_signer() {
     let e = Env::default();
     let (client, admin) = setup(&e);
@@ -210,7 +210,7 @@ fn test_double_approve_is_noop() {
 }
 
 #[test]
-#[should_panic(expected = "insufficient approvals to execute")]
+#[should_panic(expected = "Error(Contract, #605)")]
 fn test_execute_without_threshold() {
     let e = Env::default();
     let (client, admin) = setup(&e);
@@ -227,7 +227,7 @@ fn test_execute_without_threshold() {
 }
 
 #[test]
-#[should_panic(expected = "proposal already executed")]
+#[should_panic(expected = "Error(Contract, #604)")]
 fn test_execute_twice_fails() {
     let e = Env::default();
     let (client, admin) = setup(&e);
@@ -243,7 +243,7 @@ fn test_execute_twice_fails() {
 }
 
 #[test]
-#[should_panic(expected = "proposal not found")]
+#[should_panic(expected = "Error(Contract, #603)")]
 fn test_get_proposal_invalid_id() {
     let e = Env::default();
     let (client, _admin) = setup(&e);
@@ -251,7 +251,7 @@ fn test_get_proposal_invalid_id() {
 }
 
 #[test]
-#[should_panic(expected = "proposal already executed")]
+#[should_panic(expected = "Error(Contract, #604)")]
 fn test_approve_after_execute_fails() {
     let e = Env::default();
     let (client, admin) = setup(&e);
@@ -329,7 +329,7 @@ fn test_add_signer_idempotent() {
 }
 
 #[test]
-#[should_panic(expected = "not initialized")]
+#[should_panic(expected = "Error(Contract, #1)")]
 fn test_get_admin_uninitialized() {
     let e = Env::default();
     let contract_id = e.register(CredenceTreasury, ());
