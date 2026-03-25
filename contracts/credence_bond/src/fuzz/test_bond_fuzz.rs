@@ -306,7 +306,13 @@ fn fuzz_bond_operations() {
             let before_identity = token_client.balance(&identity);
             let before_contract = token_client.balance(&bond_contract_id);
 
-            let bond = client.create_bond(&identity, &amount, &duration, &is_rolling, &notice);
+            let bond = client.create_bond_with_rolling(
+                &identity,
+                &amount,
+                &duration,
+                &is_rolling,
+                &notice,
+            );
             create_ok = create_ok.saturating_add(1);
             assert_bond_invariants(&bond);
 
@@ -348,7 +354,7 @@ fn fuzz_bond_operations() {
             let before_contract = token_client.balance(&bond_contract_id);
 
             let create_res = catch_unwind(AssertUnwindSafe(|| {
-                client.create_bond(&identity, &amount, &duration, &is_rolling, &notice)
+                client.create_bond_with_rolling(&identity, &amount, &duration, &is_rolling, &notice)
             }));
 
             let _created_bond = match create_res {

@@ -142,8 +142,9 @@ fn deactivate_verifier_prevents_attestation_and_allows_withdrawal() {
     // Attest once successfully.
     let subject = Address::generate(&e);
     let data = soroban_sdk::String::from_str(&e, "ok");
+    let deadline = e.ledger().timestamp() + 100_000;
     let nonce = client.get_nonce(&verifier);
-    client.add_attestation(&verifier, &subject, &data, &nonce);
+    client.add_attestation(&verifier, &subject, &data, &contract_id, &deadline, &nonce);
 
     // Deactivate.
     client.deactivate_verifier(&verifier);
@@ -151,11 +152,14 @@ fn deactivate_verifier_prevents_attestation_and_allows_withdrawal() {
 
     // Should no longer be able to attest.
     let result = catch_unwind(AssertUnwindSafe(|| {
+        let n = client.get_nonce(&verifier);
         client.add_attestation(
             &verifier,
             &subject,
             &soroban_sdk::String::from_str(&e, "should fail"),
-            &client.get_nonce(&verifier),
+            &contract_id,
+            &deadline,
+            &n,
         );
     }));
     assert!(result.is_err());
@@ -204,7 +208,7 @@ fn admin_can_deactivate_verifier() {
 #[test]
 fn verifier_reputation_updates_on_attestation_and_revocation() {
     let e = Env::default();
-    let (client, admin, verifier, _token, _contract_id) = setup_with_token(&e);
+    let (client, admin, verifier, _token, contract_id) = setup_with_token(&e);
 
     // Make weight deterministic: weight = stake (100% multiplier) with generous cap.
     client.set_weight_config(&admin, &10_000u32, &1_000_000u32);
@@ -219,8 +223,9 @@ fn verifier_reputation_updates_on_attestation_and_revocation() {
 
     let subject = Address::generate(&e);
     let data = soroban_sdk::String::from_str(&e, "rep");
+    let deadline = e.ledger().timestamp() + 100_000;
     let nonce0 = client.get_nonce(&verifier);
-    let att = client.add_attestation(&verifier, &subject, &data, &nonce0);
+    let att = client.add_attestation(&verifier, &subject, &data, &contract_id, &deadline, &nonce0);
     assert_eq!(att.weight, 1_000u32);
 
     let after_add = client.get_verifier_info(&verifier).unwrap();
@@ -229,7 +234,7 @@ fn verifier_reputation_updates_on_attestation_and_revocation() {
     assert_eq!(after_add.attestations_revoked, 0);
 
     let nonce1 = client.get_nonce(&verifier);
-    client.revoke_attestation(&verifier, &att.id, &nonce1);
+    client.revoke_attestation(&verifier, &att.id, &contract_id, &deadline, &nonce1);
 
     let after_revoke = client.get_verifier_info(&verifier).unwrap();
     assert_eq!(after_revoke.reputation, 0i128);

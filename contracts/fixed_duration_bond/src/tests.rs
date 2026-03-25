@@ -1,7 +1,7 @@
 //! Comprehensive tests for the fixed_duration_bond contract.
 
 use crate::test_helpers::*;
-use crate::{FixedDurationBond, FixedDurationBondClient};
+use crate::{FixedDurationBond, FixedDurationBondClient, MAX_FEE_BPS};
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{Address, Env};
@@ -325,6 +325,19 @@ fn test_fee_deducted_from_bond_amount() {
 }
 
 #[test]
+fn test_set_fee_config_max_bps_allows() {
+    let e = Env::default();
+    let (client, admin, owner, _token, _cid) = setup(&e);
+
+    let treasury = Address::generate(&e);
+    client.set_fee_config(&admin, &treasury, &MAX_FEE_BPS); // max allowed (bps)
+
+    let gross = 10_000_i128;
+    let bond = client.create_bond(&owner, &gross, &ONE_DAY);
+    assert_eq!(bond.amount, 9_000); // 10% fee at max cap
+}
+
+#[test]
 fn test_collect_fees() {
     let e = Env::default();
     let (client, admin, owner, token_addr, _cid) = setup(&e);
@@ -357,6 +370,15 @@ fn test_set_fee_config_unauthorized_panics() {
     let impostor = Address::generate(&e);
     let treasury = Address::generate(&e);
     client.set_fee_config(&impostor, &treasury, &100_u32);
+}
+
+#[test]
+#[should_panic(expected = "fee_bps must be <= 1000 (10%)")]
+fn test_set_fee_config_over_max_panics() {
+    let e = Env::default();
+    let (client, admin, _owner, _token, _cid) = setup(&e);
+    let treasury = Address::generate(&e);
+    client.set_fee_config(&admin, &treasury, &(MAX_FEE_BPS + 1));
 }
 
 // ═══════════════════════════════════════════════════════════════════

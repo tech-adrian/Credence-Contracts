@@ -330,7 +330,7 @@ fn test_duplicate_bond_in_batch_fails() {
     let (client, _admin, identity, _token, _contract_id) = setup_with_token(&env);
 
     // Create first bond
-    client.create_bond(&identity, &1000, &86400, &false, &0);
+    client.create_bond_with_rolling(&identity, &1000, &86400, &false, &0);
 
     // Try to create another bond (will fail because bond already exists)
     let mut params_list = Vec::new(&env);

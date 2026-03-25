@@ -44,7 +44,7 @@ fn test_increase_bond_success_transfers_and_updates_storage() {
     // Approve enough for both create_bond (1000) and increase_bond (500)
     token_client.approve(&identity, &contract_id, &2000_i128, &1000_u32);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
 
     let before_user = token_client.balance(&identity);
     let before_contract = token_client.balance(&contract_id);
@@ -68,7 +68,7 @@ fn test_increase_bond_fails_without_token_configuration() {
     let admin = Address::generate(&e);
     let identity = Address::generate(&e);
     client.initialize(&admin);
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
 
     client.increase_bond(&identity, &10_i128);
 }
@@ -85,7 +85,7 @@ fn test_increase_bond_fails_for_non_owner() {
     token_client.approve(&identity, &contract_id, &2000_i128, &1000_u32);
     token_client.approve(&stranger, &contract_id, &500_i128, &1000_u32);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
 
     client.increase_bond(&stranger, &500_i128);
 }
@@ -99,7 +99,7 @@ fn test_increase_bond_rejects_zero_amount() {
     // Approve for create_bond
     token_client.approve(&identity, &contract_id, &2000_i128, &1000_u32);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     client.increase_bond(&identity, &0_i128);
 }
 
@@ -111,7 +111,7 @@ fn test_increase_bond_overflow_protection() {
 
     // First create a bond with a normal amount
     token_client.approve(&identity, &contract_id, &2000_i128, &1000_u32);
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
 
     // Now try to increase by i128::MAX - this should cause overflow
     token_client.approve(&identity, &contract_id, &i128::MAX, &1000_u32);
@@ -128,7 +128,7 @@ fn test_increase_bond_fails_without_allowance() {
     // Approve for create_bond only
     token_client.approve(&identity, &contract_id, &1000_i128, &1000_u32);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
 
     // No approval for increase_bond - should fail
     client.increase_bond(&identity, &500_i128);
@@ -142,7 +142,7 @@ fn test_increase_bond_emits_event() {
     // Approve for create_bond (1000) and increase_bond (250)
     token_client.approve(&identity, &contract_id, &2000_i128, &1000_u32);
 
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
 
     let _ = client.increase_bond(&identity, &250_i128);
 
@@ -178,7 +178,8 @@ fn test_increase_bond_preserves_other_fields() {
     // Approve for create_bond (1000) and increase_bond (150)
     token_client.approve(&identity, &contract_id, &2000_i128, &1000_u32);
 
-    let original = client.create_bond(&identity, &1000_i128, &86400_u64, &true, &7200_u64);
+    let original =
+        client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &true, &7200_u64);
 
     let updated = client.increase_bond(&identity, &150_i128);
 

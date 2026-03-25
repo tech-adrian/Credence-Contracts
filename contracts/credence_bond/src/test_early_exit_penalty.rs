@@ -24,7 +24,7 @@ fn test_early_exit_penalty_calculation_zero_penalty_rate() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let treasury = Address::generate(&e);
     let (client, _admin, identity) = setup(&e, &treasury, 0);
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
 
     let bond = client.withdraw_early(&500);
     assert_eq!(bond.bonded_amount, 500);
@@ -36,7 +36,7 @@ fn test_early_exit_penalty_calculation_max_penalty() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let treasury = Address::generate(&e);
     let (client, _admin, identity) = setup(&e, &treasury, 10_000); // 100%
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     // Withdraw at start: remaining = 86400, total = 86400 -> full penalty
     let bond = client.withdraw_early(&500);
     assert_eq!(bond.bonded_amount, 500);
@@ -49,7 +49,7 @@ fn test_early_exit_penalty_half_remaining() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let treasury = Address::generate(&e);
     let (client, _admin, identity) = setup(&e, &treasury, 1000); // 10%
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     // At t=44200: remaining=43200, total=86400 -> 50% of penalty rate -> 5% of amount
     e.ledger().with_mut(|li| li.timestamp = 44200);
     let bond = client.withdraw_early(&100);
@@ -63,7 +63,7 @@ fn test_early_exit_emits_penalty_event() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let treasury = Address::generate(&e);
     let (client, _admin, identity) = setup(&e, &treasury, 500); // 5%
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     client.withdraw_early(&200);
     // Event (early_exit_penalty, (identity, 200, penalty, treasury)) should be emitted
     // We can't easily assert events in Soroban test without event parsing; bond state is updated
@@ -78,7 +78,7 @@ fn test_early_exit_rejected_after_lock_up() {
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let treasury = Address::generate(&e);
     let (client, _admin, identity) = setup(&e, &treasury, 500);
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     e.ledger().with_mut(|li| li.timestamp = 87401);
     client.withdraw_early(&100);
 }
@@ -89,7 +89,7 @@ fn test_early_exit_fails_without_config() {
     let e = Env::default();
     e.ledger().with_mut(|li| li.timestamp = 1000);
     let (client, _admin, identity, ..) = test_helpers::setup_with_token(&e);
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     client.withdraw_early(&100);
 }
 

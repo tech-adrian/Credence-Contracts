@@ -28,6 +28,9 @@ mod test_helpers;
 #[cfg(test)]
 mod tests;
 
+/// Maximum fee in basis points (1000 = 10%).
+pub const MAX_FEE_BPS: u32 = 1000;
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 fn require_admin(e: &Env, caller: &Address) {
@@ -78,8 +81,23 @@ impl FixedDurationBond {
     /// `fee_bps` = 0 effectively disables the fee.
     pub fn set_fee_config(e: Env, admin: Address, treasury: Address, fee_bps: u32) {
         require_admin(&e, &admin);
+        if fee_bps > MAX_FEE_BPS {
+            panic!("{}", ERR_FEE_BPS_TOO_HIGH);
+        }
+
+        let previous: Option<FeeConfig> = e.storage().instance().get(&DataKey::FeeConfig);
         let cfg = FeeConfig { treasury, fee_bps };
         e.storage().instance().set(&DataKey::FeeConfig, &cfg);
+
+        let (old_treasury, old_fee_bps) = match previous {
+            Some(prev) => (Some(prev.treasury), prev.fee_bps),
+            None => (None, 0_u32),
+        };
+
+        e.events().publish(
+            (Symbol::new(&e, "fee_config_updated"),),
+            (old_treasury, old_fee_bps, cfg.treasury, cfg.fee_bps),
+        );
     }
 
     /// Set the default early-exit penalty applied when `withdraw_early` is called.

@@ -10,10 +10,10 @@ pub const MIN_BOND_AMOUNT: i128 = 1_000_000; // 1 token (assuming 6 decimals lik
 pub const MAX_BOND_AMOUNT: i128 = 100_000_000_000_000; // 100M tokens (assuming 6 decimals)
 
 /// Validates that a bond amount is within acceptable bounds.
-/// 
+///
 /// # Arguments
 /// * `amount` - The bond amount to validate
-/// 
+///
 /// # Panics
 /// * If amount is less than MIN_BOND_AMOUNT
 /// * If amount is greater than MAX_BOND_AMOUNT
@@ -22,17 +22,21 @@ pub fn validate_bond_amount(amount: i128) {
     if amount < 0 {
         panic!("bond amount cannot be negative");
     }
-    
+
     if amount < MIN_BOND_AMOUNT {
-        panic!("bond amount below minimum required: {} (minimum: {})", amount, MIN_BOND_AMOUNT);
+        panic!(
+            "bond amount below minimum required: {} (minimum: {})",
+            amount, MIN_BOND_AMOUNT
+        );
     }
-    
+
     if amount > MAX_BOND_AMOUNT {
-        panic!("bond amount exceeds maximum allowed: {} (maximum: {})", amount, MAX_BOND_AMOUNT);
+        panic!(
+            "bond amount exceeds maximum allowed: {} (maximum: {})",
+            amount, MAX_BOND_AMOUNT
+        );
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -69,23 +73,7 @@ mod tests {
     fn test_validate_bond_amount_above_maximum() {
         validate_bond_amount(MAX_BOND_AMOUNT + 1);
     }
-
-
 }
-//! Duration Validation Module
-//!
-//! Provides validation logic for bond durations including minimum and maximum limit
-//! enforcement. All bond creations must pass duration validation before proceeding.
-//!
-//! ## Constraints
-//! - **Minimum Duration**: Bonds must have a duration of at least 1 day (86_400 seconds)
-//!   to prevent trivially short bonds that offer no meaningful commitment.
-//! - **Maximum Duration**: Bonds are capped at 365 days (31_536_000 seconds) to limit
-//!   excessive lock-up risk and contract state lifetime.
-//!
-//! ## Error Messages
-//! - `"bond duration too short: minimum is 86400 seconds (1 day)"` — when duration < MIN
-//! - `"bond duration too long: maximum is 31536000 seconds (365 days)"` — when duration > MAX
 
 /// Minimum bond duration in seconds (1 day = 86_400 seconds).
 pub const MIN_BOND_DURATION: u64 = 86_400;

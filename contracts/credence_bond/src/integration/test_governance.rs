@@ -25,7 +25,7 @@ fn setup(
     let g2 = Address::generate(e);
     let g3 = Address::generate(e);
 
-    client.create_bond(&identity, &1_000_i128, &86_400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86_400_u64, &false, &0_u64);
 
     let governors = Vec::from_array(e, [g1.clone(), g2.clone(), g3.clone()]);
     client.initialize_governance(&admin, &governors, &6_600_u32, &2_u32);

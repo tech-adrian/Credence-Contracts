@@ -19,7 +19,7 @@ fn setup_with_bond_and_governance<'a>(
     min_governors: u32,
 ) -> (CredenceBondClient<'a>, Address, Address) {
     let (client, admin, identity) = setup(e);
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     let mut gov_vec = Vec::new(e);
     for g in governors {
         gov_vec.push_back(g.clone());
@@ -57,8 +57,6 @@ fn test_initialize_governance_unauthorized() {
 fn test_propose_slash() {
     let e = Env::default();
     let g1 = Address::generate(&e);
-    let (client, admin, _identity) =
-        setup_with_bond_and_governance(&e, core::slice::from_ref(&g1), 5100, 1);
     let (client, admin, _identity) = setup_with_bond_and_governance(&e, &[g1.clone()], 5100, 1);
     let id = client.propose_slash(&admin, &100_i128);
     assert_eq!(id, 0);
@@ -76,8 +74,6 @@ fn test_propose_slash() {
 fn test_vote_approve_and_execute() {
     let e = Env::default();
     let g1 = Address::generate(&e);
-    let (client, admin, _identity) =
-        setup_with_bond_and_governance(&e, core::slice::from_ref(&g1), 5100, 1);
     let (client, admin, _identity) = setup_with_bond_and_governance(&e, &[g1.clone()], 5100, 1);
     let _id = client.propose_slash(&admin, &100_i128);
     client.governance_vote(&g1, &0_u64, &true);

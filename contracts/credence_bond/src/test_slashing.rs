@@ -37,7 +37,7 @@ fn setup_with_bond(
     duration: u64,
 ) -> (CredenceBondClient<'_>, Address, Address) {
     let (client, admin, identity) = setup(e);
-    client.create_bond(&identity, &amount, &duration, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &amount, &duration, &false, &0_u64);
     (client, admin, identity)
 }
 
@@ -48,7 +48,7 @@ fn setup_with_bond_max_mint(
     duration: u64,
 ) -> (CredenceBondClient<'_>, Address, Address) {
     let (client, admin, identity, _token_id, _bond_id) = test_helpers::setup_with_max_mint(e);
-    client.create_bond(&identity, &amount, &duration, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &amount, &duration, &false, &0_u64);
     (client, admin, identity)
 }
 
@@ -112,7 +112,7 @@ fn test_slash_unauthorized_rejection() {
     let (_client, _admin, _identity) = setup_with_bond(&e, 1000_i128, 86400_u64);
 
     let (client, _admin, identity) = setup(&e);
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     let other = Address::generate(&e);
     client.slash(&other, &100_i128);
 }
@@ -337,7 +337,7 @@ fn test_withdraw_after_slash_respects_available() {
     let e = Env::default();
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     client.slash(&admin, &400_i128);
     e.ledger().with_mut(|li| li.timestamp = 86401);
     let bond = client.withdraw(&600_i128);
@@ -351,7 +351,7 @@ fn test_withdraw_more_than_available_after_slash() {
     let e = Env::default();
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     client.slash(&admin, &400_i128);
     e.ledger().with_mut(|li| li.timestamp = 86401);
     client.withdraw(&601_i128);
@@ -363,7 +363,7 @@ fn test_withdraw_when_fully_slashed() {
     let e = Env::default();
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
 
     // Fully slash the bond
     client.slash(&admin, &1000_i128);
@@ -378,7 +378,7 @@ fn test_withdraw_exact_available_balance() {
     let e = Env::default();
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
     client.slash(&admin, &400_i128);
     e.ledger().with_mut(|li| li.timestamp = 86401);
     let bond = client.withdraw(&600_i128);
@@ -391,7 +391,7 @@ fn test_slash_then_withdraw_then_slash_again() {
     let e = Env::default();
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
 
     // Slash, withdraw, slash again
     client.slash(&admin, &200_i128);
@@ -411,7 +411,7 @@ fn test_slash_after_partial_withdrawal() {
     let e = Env::default();
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
-    client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
 
     // Withdraw first
     e.ledger().with_mut(|li| li.timestamp = 86401);

@@ -6,9 +6,8 @@ fn test_create_bond() {
     let e = Env::default();
     let (client, _admin, identity, _token_id, _bond_id) = test_helpers::setup_with_token(&e);
 
-    let identity = Address::generate(&e);
-    let bond = client.create_bond(&identity, &1000_i128, &86400_u64);
-    let bond = client.create_bond(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    let bond =
+        client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
 
     assert!(bond.active);
     assert_eq!(bond.bonded_amount, 1000_i128);

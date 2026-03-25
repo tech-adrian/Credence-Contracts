@@ -12,6 +12,7 @@ fn setup(
     CredenceBondClient<'_>,
     soroban_sdk::Address,
     soroban_sdk::Address,
+    soroban_sdk::Address, // contract_id
 ) {
     e.mock_all_auths();
     let contract_id = e.register(CredenceBond, ());
@@ -20,19 +21,23 @@ fn setup(
     client.initialize(&admin);
     let attester = soroban_sdk::Address::generate(e);
     client.register_attester(&attester);
-    (client, admin, attester)
+    (client, admin, attester, contract_id)
 }
 
 #[test]
 fn default_weight_is_one() {
     let e = Env::default();
-    let (client, _admin, attester) = setup(&e);
+    let (client, _admin, attester, contract_id) = setup(&e);
     let subject = soroban_sdk::Address::generate(&e);
+    let deadline = e.ledger().timestamp() + 100_000;
+    let nonce = client.get_nonce(&attester);
     let att = client.add_attestation(
         &attester,
         &subject,
         &String::from_str(&e, "data"),
-        &client.get_nonce(&attester),
+        &contract_id,
+        &deadline,
+        &nonce,
     );
     assert_eq!(att.weight, 1);
 }
@@ -40,15 +45,19 @@ fn default_weight_is_one() {
 #[test]
 fn weight_increases_with_stake() {
     let e = Env::default();
-    let (client, admin, attester) = setup(&e);
+    let (client, admin, attester, contract_id) = setup(&e);
     client.set_attester_stake(&admin, &attester, &1_000_000i128);
     client.set_weight_config(&admin, &100u32, &100_000u32);
     let subject = soroban_sdk::Address::generate(&e);
+    let deadline = e.ledger().timestamp() + 100_000;
+    let nonce = client.get_nonce(&attester);
     let att = client.add_attestation(
         &attester,
         &subject,
         &String::from_str(&e, "data"),
-        &client.get_nonce(&attester),
+        &contract_id,
+        &deadline,
+        &nonce,
     );
     assert!(att.weight >= 1);
 }
@@ -56,15 +65,19 @@ fn weight_increases_with_stake() {
 #[test]
 fn weight_capped_by_config() {
     let e = Env::default();
-    let (client, admin, attester) = setup(&e);
+    let (client, admin, attester, contract_id) = setup(&e);
     client.set_attester_stake(&admin, &attester, &1_000_000_000_000i128);
     client.set_weight_config(&admin, &100_000u32, &500u32);
     let subject = soroban_sdk::Address::generate(&e);
+    let deadline = e.ledger().timestamp() + 100_000;
+    let nonce = client.get_nonce(&attester);
     let att = client.add_attestation(
         &attester,
         &subject,
         &String::from_str(&e, "capped"),
-        &client.get_nonce(&attester),
+        &contract_id,
+        &deadline,
+        &nonce,
     );
     assert!(att.weight <= 500);
 }
@@ -72,7 +85,7 @@ fn weight_capped_by_config() {
 #[test]
 fn get_weight_config_returns_set_values() {
     let e = Env::default();
-    let (client, admin, _attester) = setup(&e);
+    let (client, admin, _attester, _contract_id) = setup(&e);
     client.set_weight_config(&admin, &200u32, &10_000u32);
     let (mult, max) = client.get_weight_config();
     assert_eq!(mult, 200);
@@ -124,17 +137,21 @@ fn set_attester_stake_negative_panics() {
 #[test]
 fn weight_capped_by_max_attestation_weight() {
     let e = Env::default();
-    let (client, admin, attester) = setup(&e);
+    let (client, admin, attester, contract_id) = setup(&e);
     // Use stake high enough to exceed MAX_ATTESTATION_WEIGHT but avoid overflow: 200M * 100 / 10_000 = 2M
     client.set_attester_stake(&admin, &attester, &200_000_000i128);
     let max_requested = MAX_ATTESTATION_WEIGHT + 1000u32;
     client.set_weight_config(&admin, &100u32, &max_requested);
     let subject = soroban_sdk::Address::generate(&e);
+    let deadline = e.ledger().timestamp() + 100_000;
+    let nonce = client.get_nonce(&attester);
     let att = client.add_attestation(
         &attester,
         &subject,
         &String::from_str(&e, "max_cap"),
-        &client.get_nonce(&attester),
+        &contract_id,
+        &deadline,
+        &nonce,
     );
     assert!(att.weight <= MAX_ATTESTATION_WEIGHT);
 }
@@ -142,24 +159,31 @@ fn weight_capped_by_max_attestation_weight() {
 #[test]
 fn weight_updates_when_stake_changes() {
     let e = Env::default();
-    let (client, admin, attester) = setup(&e);
+    let (client, admin, attester, contract_id) = setup(&e);
     client.set_weight_config(&admin, &100u32, &100_000u32);
+    let deadline = e.ledger().timestamp() + 100_000;
 
     client.set_attester_stake(&admin, &attester, &10_000i128);
     let subject = soroban_sdk::Address::generate(&e);
+    let nonce1 = client.get_nonce(&attester);
     let att1 = client.add_attestation(
         &attester,
         &subject,
         &String::from_str(&e, "first"),
-        &client.get_nonce(&attester),
+        &contract_id,
+        &deadline,
+        &nonce1,
     );
 
     client.set_attester_stake(&admin, &attester, &1_000_000i128);
+    let nonce2 = client.get_nonce(&attester);
     let att2 = client.add_attestation(
         &attester,
         &subject,
         &String::from_str(&e, "second"),
-        &client.get_nonce(&attester),
+        &contract_id,
+        &deadline,
+        &nonce2,
     );
 
     assert!(
@@ -171,7 +195,7 @@ fn weight_updates_when_stake_changes() {
 #[test]
 fn set_weight_config_caps_max_at_protocol_limit() {
     let e = Env::default();
-    let (client, admin, _attester) = setup(&e);
+    let (client, admin, _attester, _contract_id) = setup(&e);
     let max_requested = MAX_ATTESTATION_WEIGHT + 5000u32;
     client.set_weight_config(&admin, &100u32, &max_requested);
     let (_mult, max) = client.get_weight_config();

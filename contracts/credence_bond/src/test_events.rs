@@ -41,7 +41,7 @@ fn test_lifecycle_event_emissions() {
     let is_rolling = false;
     let notice_period = 0_u64;
 
-    client.create_bond(
+    client.create_bond_with_rolling(
         &identity,
         &initial_amount,
         &duration,
