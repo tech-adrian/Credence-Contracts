@@ -44,14 +44,13 @@ pub fn calculate_fee(e: &Env, amount: i128) -> (i128, i128) {
     if fee_bps == 0 || amount <= 0 {
         return (0, amount);
     }
-    let fee = math::bps(
+    math::split_bps(
         amount,
         fee_bps,
         "fee calculation overflow",
         "fee calculation div-by-zero",
-    );
-    let net = amount.checked_sub(fee).expect("fee calculation underflow");
-    (fee, net)
+        "fee calculation underflow",
+    )
 }
 
 /// Check if fee is waived for this bond (e.g. zero amount, or future: whitelisted identity).
@@ -70,7 +69,7 @@ pub fn record_fee(e: &Env, identity: &Address, amount: i128, fee: i128, treasury
     }
     let key = Symbol::new(e, "fees");
     let current: i128 = e.storage().instance().get(&key).unwrap_or(0);
-    let new_total = current.checked_add(fee).expect("fee pool overflow");
+    let new_total = math::add_i128(current, fee, "fee pool overflow");
     e.storage().instance().set(&key, &new_total);
     emit_fee_event(e, identity, amount, fee, treasury);
 }

@@ -420,3 +420,66 @@ fn test_timestamp_on_registration() {
     // Timestamp should be >= before registration
     assert!(entry.registered_at >= before_timestamp);
 }
+
+// -- Issue #139: duplicate asset listing prevention
+
+#[test]
+fn test_registered_identities_no_duplicates_after_deactivate_reregister() {
+    let (env, contract_id, _admin) = setup_registry();
+    let client = CredenceRegistryClient::new(&env, &contract_id);
+
+    let identity = Address::generate(&env);
+    let bond_contract = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    client.register(&identity, &bond_contract, &true);
+    client.deactivate(&identity);
+
+    // Attempt to re-register same identity must fail (error #400).
+    let result = client.try_register(&identity, &bond_contract, &true);
+    assert!(
+        result.is_err(),
+        "Re-registering an existing identity must fail"
+    );
+
+    // List must still have exactly one entry.
+    let all = client.get_all_identities();
+    assert_eq!(
+        all.len(),
+        1,
+        "RegisteredIdentities must not contain duplicates"
+    );
+}
+
+#[test]
+fn test_registered_identities_list_length_matches_unique_registrations() {
+    let (env, contract_id, _admin) = setup_registry();
+    let client = CredenceRegistryClient::new(&env, &contract_id);
+
+    env.mock_all_auths();
+
+    let id1 = Address::generate(&env);
+    let bond1 = Address::generate(&env);
+    let id2 = Address::generate(&env);
+    let bond2 = Address::generate(&env);
+    let id3 = Address::generate(&env);
+    let bond3 = Address::generate(&env);
+
+    client.register(&id1, &bond1, &true);
+    client.register(&id2, &bond2, &true);
+    client.register(&id3, &bond3, &true);
+
+    client.deactivate(&id2);
+
+    let all = client.get_all_identities();
+    assert_eq!(
+        all.len(),
+        3,
+        "List length must reflect all registered identities including deactivated ones"
+    );
+
+    assert_eq!(client.get_identity(&bond1), id1);
+    assert_eq!(client.get_identity(&bond2), id2);
+    assert_eq!(client.get_identity(&bond3), id3);
+}

@@ -32,7 +32,7 @@ pub fn set_token(e: &Env, admin: &Address, token: &Address) {
     if *admin != stored_admin {
         panic!("not admin");
     }
-    e.storage().instance().set(&DataKey::Token, token);
+    e.storage().instance().set(&DataKey::BondToken, token);
 }
 
 /// @notice Sets the USDC token contract and associated network label.
@@ -56,7 +56,7 @@ pub fn set_usdc_token(e: &Env, admin: &Address, token: &Address, network: &Strin
 pub fn get_token(e: &Env) -> Address {
     e.storage()
         .instance()
-        .get(&DataKey::Token)
+        .get(&DataKey::BondToken)
         .unwrap_or_else(|| panic!("token not set"))
 }
 

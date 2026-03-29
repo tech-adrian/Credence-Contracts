@@ -34,6 +34,16 @@ pub struct FeeConfig {
     pub fee_bps: u32,
 }
 
+/// Oracle safety bounds configured per asset.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct OracleSafety {
+    /// Minimum accepted oracle answer (inclusive).
+    pub min_answer: i128,
+    /// Maximum accepted oracle answer (inclusive).
+    pub max_answer: i128,
+}
+
 // ─── Storage keys ──────────────────────────────────────────────────────────
 
 #[contracttype]
@@ -44,6 +54,8 @@ pub enum DataKey {
     Token,
     /// Optional bond-creation fee config (FeeConfig).
     FeeConfig,
+    /// Per-asset oracle answer safety bounds.
+    OracleSafety(Address),
     /// Default early-exit penalty in basis points.
     PenaltyBps,
     /// Per-owner active bond.

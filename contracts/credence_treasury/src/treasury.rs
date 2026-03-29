@@ -381,7 +381,21 @@ impl CredenceTreasury {
     }
 
     /// Execute a withdrawal proposal. Callable by anyone once approval count >= threshold. Deducts from total and from both source buckets proportionally (by ratio of source/total at execution time) for accounting; for simplicity we deduct from total only and leave source balances as-is for reporting (so we track "received" by source; withdrawals are from the pool). Actually the issue says "track fund sources" — so we need to either (1) deduct from total only and keep source balances as "total ever received per source" (then total = sum of sources minus withdrawals would require a separate "withdrawn" counter), or (2) deduct from total and also deduct from each source proportionally. Simpler: total balance is the only withdrawable amount; balance_by_source is informational (total received per source). So on withdraw we only subtract from TotalBalance. Then balance_by_source no longer sums to total after withdrawals. Alternative: on withdraw we subtract from total and also reduce each source proportionally. That way get_balance_by_source still reflects "available from this source". Let me do proportional deduction so that source tracking stays consistent: when we withdraw, we deduct from TotalBalance and from each BalanceBySource in proportion to their share. So: total T, protocol P, slashed S. Withdraw W. New total = T - W. Ratio: P/T and S/T. Deduct from P: W * P / T, from S: W * S / T. So both get reduced proportionally.
-    pub fn execute_withdrawal(e: Env, proposal_id: u64) {
+    /// Execute a withdrawal proposal. Callable by anyone once approval count >= threshold.
+    ///
+    /// # Arguments
+    /// * `proposal_id`   - ID of the approved withdrawal proposal.
+    /// * `min_amount_out` - Caller-provided minimum acceptable settlement amount.
+    ///                      Reverts with "slippage: received amount below minimum" when
+    ///                      the proposal amount is less than this value, protecting the
+    ///                      caller against unfavorable price movement between proposal
+    ///                      creation and execution.  Pass `0` to skip the check.
+    ///
+    /// # Events
+    /// Emits `treasury_withdrawal_executed` with `(recipient, expected, actual)` so
+    /// off-chain observers can detect any discrepancy between the proposed and settled
+    /// amounts.
+    pub fn execute_withdrawal(e: Env, proposal_id: u64, min_amount_out: i128) {
         pausable::require_not_paused(&e);
         let mut proposal: WithdrawalProposal = e
             .storage()
@@ -408,9 +422,14 @@ impl CredenceTreasury {
         if total < proposal.amount {
             panic_with_error!(&e, ContractError::InsufficientTreasuryBalance);
         }
+        // Slippage guard: revert if the settled amount falls below the caller's threshold.
+        if proposal.amount < min_amount_out {
+            panic!("slippage: received amount below minimum");
+        }
+        let actual_amount = proposal.amount;
         let new_total = total
-            .checked_sub(proposal.amount)
-            .unwrap_or_else(|| panic_with_error!(&e, ContractError::Underflow));
+            .checked_sub(actual_amount)
+            .expect("withdrawal underflow");
         e.storage()
             .instance()
             .set(&DataKey::TotalBalance, &new_total);
@@ -418,9 +437,10 @@ impl CredenceTreasury {
         e.storage()
             .instance()
             .set(&DataKey::Proposal(proposal_id), &proposal);
+        // Emit (recipient, min_amount_out, actual_amount) so observers can verify settlement.
         e.events().publish(
             (Symbol::new(&e, "treasury_withdrawal_executed"), proposal_id),
-            (proposal.recipient.clone(), proposal.amount),
+            (proposal.recipient.clone(), min_amount_out, actual_amount),
         );
     }
 

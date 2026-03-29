@@ -159,7 +159,7 @@ pub fn register_with_stake(e: &Env, verifier: &Address, stake_deposit: i128) -> 
         let token: Address = e
             .storage()
             .instance()
-            .get(&DataKey::Token)
+            .get(&DataKey::BondToken)
             .unwrap_or_else(|| panic!("token not set"));
         let contract = e.current_contract_address();
         TokenClient::new(e, &token).transfer_from(&contract, verifier, &contract, &stake_deposit);
@@ -268,7 +268,7 @@ pub fn withdraw_stake(e: &Env, verifier: &Address, amount: i128) -> VerifierInfo
     let token: Address = e
         .storage()
         .instance()
-        .get(&DataKey::Token)
+        .get(&DataKey::BondToken)
         .unwrap_or_else(|| panic!("token not set"));
     let contract = e.current_contract_address();
     TokenClient::new(e, &token).transfer(&contract, verifier, &amount);

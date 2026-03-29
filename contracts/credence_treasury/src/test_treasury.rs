@@ -135,7 +135,7 @@ fn test_propose_approve_execute_withdrawal() {
     assert_eq!(client.get_approval_count(&id), 1);
     client.approve_withdrawal(&s2, &id);
     assert_eq!(client.get_approval_count(&id), 2);
-    client.execute_withdrawal(&id);
+    client.execute_withdrawal(&id, &0);
     assert_eq!(client.get_balance(), 7000);
     let prop2 = client.get_proposal(&id);
     assert!(prop2.executed);
@@ -206,7 +206,7 @@ fn test_double_approve_is_noop() {
     client.approve_withdrawal(&s1, &id);
     client.approve_withdrawal(&s1, &id);
     assert_eq!(client.get_approval_count(&id), 1);
-    client.execute_withdrawal(&id);
+    client.execute_withdrawal(&id, &0);
 }
 
 #[test]
@@ -223,7 +223,7 @@ fn test_execute_without_threshold() {
     client.set_threshold(&2);
     let id = client.propose_withdrawal(&s1, &recipient, &100);
     client.approve_withdrawal(&s1, &id);
-    client.execute_withdrawal(&id);
+    client.execute_withdrawal(&id, &0);
 }
 
 #[test]
@@ -238,8 +238,8 @@ fn test_execute_twice_fails() {
     client.set_threshold(&1);
     let id = client.propose_withdrawal(&s1, &recipient, &100);
     client.approve_withdrawal(&s1, &id);
-    client.execute_withdrawal(&id);
-    client.execute_withdrawal(&id);
+    client.execute_withdrawal(&id, &0);
+    client.execute_withdrawal(&id, &0);
 }
 
 #[test]
@@ -264,7 +264,7 @@ fn test_approve_after_execute_fails() {
     client.set_threshold(&1);
     let id = client.propose_withdrawal(&s1, &recipient, &100);
     client.approve_withdrawal(&s1, &id);
-    client.execute_withdrawal(&id);
+    client.execute_withdrawal(&id, &0);
     client.approve_withdrawal(&s2, &id);
 }
 
@@ -297,11 +297,11 @@ fn test_multiple_proposals() {
     assert_ne!(id1, id2);
     client.approve_withdrawal(&s1, &id1);
     client.approve_withdrawal(&s2, &id1);
-    client.execute_withdrawal(&id1);
+    client.execute_withdrawal(&id1, &0);
     assert_eq!(client.get_balance(), 4000);
     client.approve_withdrawal(&s1, &id2);
     client.approve_withdrawal(&s2, &id2);
-    client.execute_withdrawal(&id2);
+    client.execute_withdrawal(&id2, &0);
     assert_eq!(client.get_balance(), 2000);
 }
 
@@ -342,4 +342,67 @@ fn test_get_approval_count_nonexistent_proposal() {
     let e = Env::default();
     let (client, _admin) = setup(&e);
     assert_eq!(client.get_approval_count(&99), 0);
+}
+
+// ── Slippage bound tests (issue #124) ────────────────────────────────────────
+
+/// Helper: set up a funded treasury with one signer and a ready-to-execute proposal.
+fn setup_ready_proposal(amount: i128) -> (Env, CredenceTreasuryClient<'static>, u64) {
+    let e = Env::default();
+    let contract_id = e.register(CredenceTreasury, ());
+    let client = CredenceTreasuryClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    e.mock_all_auths();
+    client.initialize(&admin);
+    client.receive_fee(&admin, &amount, &FundSource::ProtocolFee);
+    let signer = Address::generate(&e);
+    let recipient = Address::generate(&e);
+    client.add_signer(&signer);
+    client.set_threshold(&1);
+    let id = client.propose_withdrawal(&signer, &recipient, &amount);
+    client.approve_withdrawal(&signer, &id);
+    (e, client, id)
+}
+
+#[test]
+fn test_execute_withdrawal_at_exact_min_amount_out_succeeds() {
+    // min_amount_out == proposal.amount → should succeed (boundary condition).
+    let (_e, client, id) = setup_ready_proposal(500);
+    client.execute_withdrawal(&id, &500);
+    assert_eq!(client.get_balance(), 0);
+    assert!(client.get_proposal(&id).executed);
+}
+
+#[test]
+fn test_execute_withdrawal_min_amount_out_zero_succeeds() {
+    // min_amount_out == 0 → no slippage check, always succeeds.
+    let (_e, client, id) = setup_ready_proposal(500);
+    client.execute_withdrawal(&id, &0);
+    assert_eq!(client.get_balance(), 0);
+}
+
+#[test]
+fn test_execute_withdrawal_min_amount_out_below_proposal_succeeds() {
+    // min_amount_out < proposal.amount → caller accepts any amount above threshold.
+    let (_e, client, id) = setup_ready_proposal(1000);
+    client.execute_withdrawal(&id, &999);
+    assert_eq!(client.get_balance(), 0);
+}
+
+#[test]
+#[should_panic(expected = "slippage: received amount below minimum")]
+fn test_execute_withdrawal_slippage_reverts_when_below_min() {
+    // min_amount_out > proposal.amount → must revert.
+    // Simulates adversarial pool behaviour: proposal was created for 500 but
+    // the caller now requires at least 501 (e.g. price moved unfavourably).
+    let (_e, client, id) = setup_ready_proposal(500);
+    client.execute_withdrawal(&id, &501);
+}
+
+#[test]
+#[should_panic(expected = "slippage: received amount below minimum")]
+fn test_execute_withdrawal_slippage_reverts_adversarial_large_min() {
+    // Adversarial: caller sets an unreachably high min_amount_out.
+    let (_e, client, id) = setup_ready_proposal(100);
+    client.execute_withdrawal(&id, &i128::MAX);
 }

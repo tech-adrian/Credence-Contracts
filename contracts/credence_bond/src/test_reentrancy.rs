@@ -184,9 +184,16 @@ use withdraw_attacker::{WithdrawAttacker, WithdrawAttackerClient};
 // Helper: set up a bond contract with admin, identity, and a bond.
 // ---------------------------------------------------------------------------
 fn setup_bond(e: &Env) -> (Address, Address, Address) {
-    let (client, admin, identity, _token_id, bond_id) = test_helpers::setup_with_token(e);
-    client.create_bond_with_rolling(&identity, &10000000_i128, &86400_u64, &false, &0_u64);
-    (bond_id, admin, identity)
+    let contract_id = e.register(CredenceBond, ());
+    let client = CredenceBondClient::new(e, &contract_id);
+
+    let admin = Address::generate(e);
+    let identity = Address::generate(e);
+
+    client.initialize(&admin);
+    client.create_bond(&identity, &10_000_i128, &86400_u64, &false, &0_u64);
+
+    (contract_id, admin, identity)
 }
 
 // ===========================================================================

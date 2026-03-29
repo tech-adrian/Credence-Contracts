@@ -5,6 +5,8 @@
 
 use soroban_sdk::{contracttype, Address, Env, Symbol};
 
+use crate::math;
+
 /// Storage key for emergency configuration.
 const KEY_EMERGENCY_CONFIG: &str = "emergency_config";
 /// Storage key for latest emergency withdrawal record id.
@@ -98,10 +100,12 @@ pub fn calculate_fee(amount: i128, fee_bps: u32) -> i128 {
     if fee_bps == 0 {
         return 0;
     }
-    amount
-        .checked_mul(fee_bps as i128)
-        .expect("emergency fee multiplication overflow")
-        / 10_000
+    math::bps(
+        amount,
+        fee_bps,
+        "emergency fee multiplication overflow",
+        "emergency fee division overflow",
+    )
 }
 
 /// @notice Persist an immutable emergency withdrawal record.

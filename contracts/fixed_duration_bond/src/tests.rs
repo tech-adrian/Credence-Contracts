@@ -1,7 +1,7 @@
 //! Comprehensive tests for the fixed_duration_bond contract.
 
 use crate::test_helpers::*;
-use crate::{FixedDurationBond, FixedDurationBondClient, MAX_FEE_BPS};
+use crate::{apply_bps, FixedDurationBond, FixedDurationBondClient, MAX_FEE_BPS};
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{Address, Env};
@@ -423,6 +423,86 @@ fn test_set_penalty_config_unauthorized_panics() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// 8b. Oracle answer sanity checks / valuation path
+// ═══════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_quote_value_success_within_configured_bounds() {
+    let e = Env::default();
+    let (client, admin, _owner, token, _cid) = setup(&e);
+
+    client.set_oracle_safety(&admin, &token, &1_i128, &2_000_000_i128);
+    let quoted = client.quote_value(&token, &10_i128, &123_456_i128);
+    assert_eq!(quoted, 1_234_560_i128);
+}
+
+#[test]
+fn test_quote_value_uses_per_asset_bounds() {
+    let e = Env::default();
+    let (client, admin, _owner, token_a, _cid) = setup(&e);
+    let token_b = Address::generate(&e);
+
+    client.set_oracle_safety(&admin, &token_a, &1_i128, &1_000_i128);
+    client.set_oracle_safety(&admin, &token_b, &2_000_i128, &5_000_i128);
+
+    let a_value = client.quote_value(&token_a, &5_i128, &1_000_i128);
+    let b_value = client.quote_value(&token_b, &5_i128, &2_000_i128);
+    assert_eq!(a_value, 5_000_i128);
+    assert_eq!(b_value, 10_000_i128);
+}
+
+#[test]
+#[should_panic(expected = "oracle answer must be positive")]
+fn test_quote_value_rejects_zero_oracle_answer() {
+    let e = Env::default();
+    let (client, admin, _owner, token, _cid) = setup(&e);
+    client.set_oracle_safety(&admin, &token, &1_i128, &2_000_000_i128);
+    client.quote_value(&token, &10_i128, &0_i128);
+}
+
+#[test]
+#[should_panic(expected = "oracle answer must be positive")]
+fn test_quote_value_rejects_negative_oracle_answer() {
+    let e = Env::default();
+    let (client, admin, _owner, token, _cid) = setup(&e);
+    client.set_oracle_safety(&admin, &token, &1_i128, &2_000_000_i128);
+    client.quote_value(&token, &10_i128, &(-1_i128));
+}
+
+#[test]
+#[should_panic(expected = "oracle answer out of configured range")]
+fn test_quote_value_rejects_extreme_oracle_answer() {
+    let e = Env::default();
+    let (client, admin, _owner, token, _cid) = setup(&e);
+    client.set_oracle_safety(&admin, &token, &1_i128, &2_000_000_i128);
+    client.quote_value(&token, &10_i128, &9_999_999_999_i128);
+}
+
+#[test]
+#[should_panic(expected = "oracle safety not configured for asset")]
+fn test_quote_value_rejects_missing_asset_config() {
+    let e = Env::default();
+    let (client, _admin, _owner, token, _cid) = setup(&e);
+    client.quote_value(&token, &10_i128, &100_i128);
+}
+
+#[test]
+#[should_panic(expected = "oracle bounds invalid")]
+fn test_set_oracle_safety_rejects_zero_min() {
+    let e = Env::default();
+    let (client, admin, _owner, token, _cid) = setup(&e);
+    client.set_oracle_safety(&admin, &token, &0_i128, &1_000_i128);
+}
+
+#[test]
+#[should_panic(expected = "oracle bounds invalid")]
+fn test_set_oracle_safety_rejects_inverted_bounds() {
+    let e = Env::default();
+    let (client, admin, _owner, token, _cid) = setup(&e);
+    client.set_oracle_safety(&admin, &token, &2_000_i128, &1_999_i128);
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // 9. Query functions
 // ═══════════════════════════════════════════════════════════════════
 
@@ -516,6 +596,33 @@ fn test_arithmetic_one_bps_fee_large_deposit() {
     let bond = client.create_bond(&owner, &large, &ONE_DAY);
     let expected_fee = large / 10_000;
     assert_eq!(bond.amount, large - expected_fee);
+}
+
+#[test]
+fn test_apply_bps_matches_legacy_formula() {
+    fn legacy_apply_bps(amount: i128, bps: u32) -> (i128, i128) {
+        let fee = amount
+            .checked_mul(bps as i128)
+            .expect("legacy fee multiplication overflow")
+            / 10_000_i128;
+        let net = amount.checked_sub(fee).expect("legacy fee net underflow");
+        (fee, net)
+    }
+
+    let cases = [
+        (0_i128, 0_u32),
+        (10_000, 100),
+        (10_000, 1_000),
+        (123_456_789, 75),
+        (i128::MAX / 20_000, 10_000),
+    ];
+
+    for (amount, bps_value) in cases {
+        assert_eq!(
+            apply_bps(amount, bps_value),
+            legacy_apply_bps(amount, bps_value)
+        );
+    }
 }
 
 /// Multiple bonds accumulate fees safely via checked addition.

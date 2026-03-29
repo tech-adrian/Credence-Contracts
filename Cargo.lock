@@ -338,6 +338,7 @@ dependencies = [
 name = "credence_bond"
 version = "0.1.0"
 dependencies = [
+ "credence_math",
  "soroban-sdk 22.0.10",
 ]
 
@@ -354,6 +355,10 @@ version = "0.1.0"
 dependencies = [
  "soroban-sdk 22.0.10",
 ]
+
+[[package]]
+name = "credence_math"
+version = "0.1.0"
 
 [[package]]
 name = "credence_multisig"
@@ -374,6 +379,7 @@ dependencies = [
 name = "credence_treasury"
 version = "0.1.0"
 dependencies = [
+ "credence_errors",
  "soroban-sdk 22.0.10",
 ]
 
@@ -722,6 +728,7 @@ checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
 name = "fixed_duration_bond"
 version = "0.1.0"
 dependencies = [
+ "credence_math",
  "soroban-sdk 22.0.10",
 ]
 

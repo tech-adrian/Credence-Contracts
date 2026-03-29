@@ -1,0 +1,8 @@
+[package]
+name = "credence_math"
+version = "0.1.0"
+edition = "2021"
+description = "Shared overflow-safe arithmetic helpers for Credence contracts."
+
+[lib]
+crate-type = ["rlib"]

@@ -17,24 +17,9 @@
 mod errors;
 mod types;
 
+use credence_math::{add_i128, split_bps};
 use errors::*;
-use types::{DataKey, FeeConfig, FixedBond};
-
-// Checked basis-point helpers used only inside this module.
-#[inline]
-fn checked_mul_i128(a: i128, b: i128, msg: &'static str) -> i128 {
-    a.checked_mul(b).unwrap_or_else(|| panic!("{msg}"))
-}
-
-#[inline]
-fn checked_add_i128(a: i128, b: i128, msg: &'static str) -> i128 {
-    a.checked_add(b).unwrap_or_else(|| panic!("{msg}"))
-}
-
-#[inline]
-fn checked_sub_i128(a: i128, b: i128, msg: &'static str) -> i128 {
-    a.checked_sub(b).unwrap_or_else(|| panic!("{msg}"))
-}
+use types::{DataKey, FeeConfig, FixedBond, OracleSafety};
 
 use soroban_sdk::{contract, contractimpl, token::TokenClient, Address, Env, Symbol};
 
@@ -77,9 +62,23 @@ fn get_token(e: &Env) -> Address {
 ///   mathematically non-negative, so any future change to call sites cannot
 ///   silently wrap.
 fn apply_bps(amount: i128, bps: u32) -> (i128, i128) {
-    let fee = checked_mul_i128(amount, bps as i128, ERR_FEE_MUL_OVERFLOW) / 10_000_i128;
-    let net = checked_sub_i128(amount, fee, "fee net underflow");
-    (fee, net)
+    split_bps(
+        amount,
+        bps,
+        ERR_FEE_MUL_OVERFLOW,
+        "fee bps division overflow",
+        "fee net underflow",
+    )
+}
+
+#[inline]
+fn validate_oracle_answer(answer: i128, safety: &OracleSafety) {
+    if answer <= 0 {
+        panic!("{}", ERR_ORACLE_ANSWER_NON_POSITIVE);
+    }
+    if answer < safety.min_answer || answer > safety.max_answer {
+        panic!("{}", ERR_ORACLE_ANSWER_OUT_OF_RANGE);
+    }
 }
 
 // ─── Contract ──────────────────────────────────────────────────────────────
@@ -133,6 +132,35 @@ impl FixedDurationBond {
             .set(&DataKey::PenaltyBps, &base_penalty_bps);
     }
 
+    /// Set per-asset oracle safety bounds.
+    ///
+    /// Bounds are inclusive and must satisfy:
+    /// - `min_answer` > 0
+    /// - `max_answer` >= `min_answer`
+    pub fn set_oracle_safety(
+        e: Env,
+        admin: Address,
+        asset: Address,
+        min_answer: i128,
+        max_answer: i128,
+    ) {
+        require_admin(&e, &admin);
+        if min_answer <= 0 || max_answer < min_answer {
+            panic!("{}", ERR_ORACLE_BOUNDS_INVALID);
+        }
+        let safety = OracleSafety {
+            min_answer,
+            max_answer,
+        };
+        e.storage()
+            .instance()
+            .set(&DataKey::OracleSafety(asset.clone()), &safety);
+        e.events().publish(
+            (Symbol::new(&e, "oracle_safety_set"), asset),
+            (min_answer, max_answer),
+        );
+    }
+
     /// Collect all accrued creation fees to the admin or treasury.
     /// Transfers the fee balance to `recipient` and resets the counter.
     pub fn collect_fees(e: Env, admin: Address, recipient: Address) -> i128 {
@@ -157,6 +185,25 @@ impl FixedDurationBond {
             (admin, recipient, accrued),
         );
         accrued
+    }
+
+    /// Converts `amount` of `asset` into quote value using an oracle answer.
+    ///
+    /// Reverts unless:
+    /// - oracle safety is configured for this asset
+    /// - answer is strictly positive
+    /// - answer is within the configured min/max bounds
+    pub fn quote_value(e: Env, asset: Address, amount: i128, oracle_answer: i128) -> i128 {
+        if amount <= 0 {
+            panic!("{}", ERR_INVALID_AMOUNT);
+        }
+        let safety: OracleSafety = e
+            .storage()
+            .instance()
+            .get(&DataKey::OracleSafety(asset))
+            .unwrap_or_else(|| panic!("{}", ERR_ORACLE_SAFETY_NOT_SET));
+        validate_oracle_answer(oracle_answer, &safety);
+        checked_mul_i128(amount, oracle_answer, ERR_VALUATION_OVERFLOW)
     }
 
     // ── Bond lifecycle ─────────────────────────────────────────────────────
@@ -216,11 +263,8 @@ impl FixedDurationBond {
                     .instance()
                     .get(&DataKey::AccruedFees)
                     .unwrap_or(0);
-                let new_fees =
-                    checked_add_i128(prev_fees, fee, ERR_FEE_ACCRUE_OVERFLOW);
-                e.storage()
-                    .instance()
-                    .set(&DataKey::AccruedFees, &new_fees);
+                let new_fees = checked_add_i128(prev_fees, fee, ERR_FEE_ACCRUE_OVERFLOW);
+                e.storage().instance().set(&DataKey::AccruedFees, &new_fees);
                 net
             } else {
                 amount

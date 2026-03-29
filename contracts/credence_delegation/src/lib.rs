@@ -77,9 +77,7 @@ impl CredenceDelegation {
         e.storage()
             .instance()
             .set(&DataKey::PauseSignerCount, &0_u32);
-        e.storage()
-            .instance()
-            .set(&DataKey::PauseThreshold, &0_u32);
+        e.storage().instance().set(&DataKey::PauseThreshold, &0_u32);
         e.storage()
             .instance()
             .set(&DataKey::PauseProposalCounter, &0_u64);
@@ -190,13 +188,7 @@ impl CredenceDelegation {
         pausable::require_not_paused(&e);
         owner.require_auth();
 
-        domain::verify_payload(
-            &e,
-            &payload,
-            DomainTag::RevokeDelegation,
-            &owner,
-            &delegate,
-        );
+        domain::verify_payload(&e, &payload, DomainTag::RevokeDelegation, &owner, &delegate);
         nonce::consume_nonce(&e, &owner, payload.nonce);
 
         Self::mark_delegation_revoked(&e, owner, delegate, delegation_type, "delegation");
@@ -205,7 +197,7 @@ impl CredenceDelegation {
     /// Relayer-friendly variant of `revoke_attestation`.
     ///
     /// Payload domain must be `DomainTag::RevokeAttestation`.
-    pub fn execute_delegated_revoke_attestation(
+    pub fn execute_delegated_revoke_attest(
         e: Env,
         attester: Address,
         subject: Address,

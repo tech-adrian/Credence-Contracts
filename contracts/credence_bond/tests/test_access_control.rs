@@ -87,7 +87,7 @@ fn owner_can_withdraw_bond() {
     let env = Env::default();
     let (client, _admin, user, _) = setup(&env);
 
-    client.create_bond_with_rolling(&user, &1000000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&user, &1000_i128, &86400_u64, &false, &0_u64);
 
     // advance time past lock-up period
     env.ledger().with_mut(|l| {

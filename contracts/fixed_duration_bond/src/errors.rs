@@ -18,3 +18,8 @@ pub const ERR_PENALTY_NOT_CONFIGURED: &str = "early-exit penalty not configured"
 pub const ERR_FEE_BPS_TOO_HIGH: &str = "fee_bps must be <= 1000 (10%)";
 pub const ERR_FEE_MUL_OVERFLOW: &str = "fee calculation overflow";
 pub const ERR_FEE_ACCRUE_OVERFLOW: &str = "accrued fees overflow";
+pub const ERR_ORACLE_BOUNDS_INVALID: &str = "oracle bounds invalid";
+pub const ERR_ORACLE_SAFETY_NOT_SET: &str = "oracle safety not configured for asset";
+pub const ERR_ORACLE_ANSWER_NON_POSITIVE: &str = "oracle answer must be positive";
+pub const ERR_ORACLE_ANSWER_OUT_OF_RANGE: &str = "oracle answer out of configured range";
+pub const ERR_VALUATION_OVERFLOW: &str = "valuation overflow";

@@ -8,6 +8,7 @@ description = "Fixed-duration USDC bond — lock tokens for an exact predetermin
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+credence_math = { path = "../credence_math" }
 soroban-sdk = { version = "22.0", features = ["testutils"] }
 
 [dev-dependencies]

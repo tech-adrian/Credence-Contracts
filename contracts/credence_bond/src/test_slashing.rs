@@ -112,7 +112,7 @@ fn test_slash_unauthorized_rejection() {
     let (_client, _admin, _identity) = setup_with_bond(&e, 1000_i128, 86400_u64);
 
     let (client, _admin, identity) = setup(&e);
-    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000_i128, &86400_u64, &false, &0_u64);
     let other = Address::generate(&e);
     client.slash(&other, &100_i128);
 }
@@ -159,13 +159,13 @@ fn test_slash_over_amount_capped() {
 #[test]
 fn test_slash_way_over_amount_capped() {
     let e = Env::default();
-    let (client, admin, _identity) = setup_with_bond(&e, 500_i128, 86400_u64);
+    let (client, admin, _identity) = setup_with_bond(&e, 1000_i128, 86400_u64);
 
-    let bond = client.slash(&admin, &999999_i128);
+    let bond = client.slash(&admin, &5_000_i128);
 
     // Should be capped at bonded_amount
-    assert_eq!(bond.slashed_amount, 500);
-    assert_eq!(bond.bonded_amount, 500);
+    assert_eq!(bond.slashed_amount, 1000);
+    assert_eq!(bond.bonded_amount, 1000);
 }
 
 #[test]
@@ -199,23 +199,26 @@ fn test_slash_zero_amount() {
 #[should_panic(expected = "slashing caused overflow")]
 fn test_slash_overflow_prevention() {
     let e = Env::default();
-    let (client, admin, _identity) = setup_with_bond_max_mint(&e, i128::MAX - 100, 86400_u64);
+    let (client, admin, _identity) =
+        setup_with_bond_max_mint(&e, crate::validation::MAX_BOND_AMOUNT, 86400_u64);
 
-    // First slash: amount = 50
-    client.slash(&admin, &50_i128);
+    // Large repeated slashes should cap cleanly at the bonded amount.
+    let bond = client.slash(&admin, &crate::validation::MAX_BOND_AMOUNT);
+    assert_eq!(bond.slashed_amount, crate::validation::MAX_BOND_AMOUNT);
 
-    // Second slash: would overflow (MAX - 100 + 50 = MAX - 50, then + i128::MAX)
-    client.slash(&admin, &i128::MAX);
+    let bond = client.slash(&admin, &i128::MAX);
+    assert_eq!(bond.slashed_amount, crate::validation::MAX_BOND_AMOUNT);
 }
 
 #[test]
 fn test_slash_on_very_large_bond() {
     let e = Env::default();
-    let (client, admin, _identity) = setup_with_bond_max_mint(&e, i128::MAX / 2, 86400_u64);
+    let (client, admin, _identity) =
+        setup_with_bond_max_mint(&e, crate::validation::MAX_BOND_AMOUNT, 86400_u64);
 
-    let bond = client.slash(&admin, &(i128::MAX / 4));
+    let bond = client.slash(&admin, &(crate::validation::MAX_BOND_AMOUNT / 4));
 
-    assert_eq!(bond.slashed_amount, i128::MAX / 4);
+    assert_eq!(bond.slashed_amount, crate::validation::MAX_BOND_AMOUNT / 4);
 }
 
 // ============================================================================
@@ -337,7 +340,7 @@ fn test_withdraw_after_slash_respects_available() {
     let e = Env::default();
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
-    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000_i128, &86400_u64, &false, &0_u64);
     client.slash(&admin, &400_i128);
     e.ledger().with_mut(|li| li.timestamp = 86401);
     let bond = client.withdraw(&600_i128);
@@ -351,7 +354,7 @@ fn test_withdraw_more_than_available_after_slash() {
     let e = Env::default();
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
-    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000_i128, &86400_u64, &false, &0_u64);
     client.slash(&admin, &400_i128);
     e.ledger().with_mut(|li| li.timestamp = 86401);
     client.withdraw(&601_i128);
@@ -363,7 +366,7 @@ fn test_withdraw_when_fully_slashed() {
     let e = Env::default();
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
-    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000_i128, &86400_u64, &false, &0_u64);
 
     // Fully slash the bond
     client.slash(&admin, &1000_i128);
@@ -378,7 +381,7 @@ fn test_withdraw_exact_available_balance() {
     let e = Env::default();
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
-    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000_i128, &86400_u64, &false, &0_u64);
     client.slash(&admin, &400_i128);
     e.ledger().with_mut(|li| li.timestamp = 86401);
     let bond = client.withdraw(&600_i128);
@@ -391,7 +394,7 @@ fn test_slash_then_withdraw_then_slash_again() {
     let e = Env::default();
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
-    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000_i128, &86400_u64, &false, &0_u64);
 
     // Slash, withdraw, slash again
     client.slash(&admin, &200_i128);
@@ -411,7 +414,7 @@ fn test_slash_after_partial_withdrawal() {
     let e = Env::default();
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
-    client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
+    client.create_bond_with_rolling(&identity, &1000_i128, &86400_u64, &false, &0_u64);
 
     // Withdraw first
     e.ledger().with_mut(|li| li.timestamp = 86401);

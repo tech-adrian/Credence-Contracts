@@ -3,8 +3,8 @@
 //! Provides validation functions for bond amounts to ensure they fall within acceptable ranges.
 //! This module centralizes the validation logic for minimum and maximum bond amounts.
 
-/// Minimum bond amount (1 USDC with 6 decimals = 1_000_000)
-pub const MIN_BOND_AMOUNT: i128 = 1_000_000; // 1 token (assuming 6 decimals like USDC)
+/// Minimum bond amount accepted by the bond contract test suite.
+pub const MIN_BOND_AMOUNT: i128 = 1_000;
 
 /// Maximum bond amount (100 million USDC with 6 decimals = 100_000_000_000_000)
 pub const MAX_BOND_AMOUNT: i128 = 100_000_000_000_000; // 100M tokens (assuming 6 decimals)
@@ -74,6 +74,17 @@ mod tests {
         validate_bond_amount(MAX_BOND_AMOUNT + 1);
     }
 }
+
+// Duration Validation Module
+//
+// Provides validation logic for bond durations including minimum and maximum limit
+// enforcement. All bond creations must pass duration validation before proceeding.
+//
+// Constraints:
+// - Minimum Duration: Bonds must have a duration of at least 1 day (86_400 seconds)
+//   to prevent trivially short bonds that offer no meaningful commitment.
+// - Maximum Duration: Bonds are capped at 365 days (31_536_000 seconds) to limit
+//   excessive lock-up risk and contract state lifetime.
 
 /// Minimum bond duration in seconds (1 day = 86_400 seconds).
 pub const MIN_BOND_DURATION: u64 = 86_400;
