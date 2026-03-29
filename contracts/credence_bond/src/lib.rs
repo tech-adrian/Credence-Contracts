@@ -7,6 +7,8 @@ use soroban_sdk::{
 
 pub mod access_control;
 mod batch;
+mod claims;
+mod cooldown;
 pub mod early_exit_penalty;
 mod emergency;
 mod events;
@@ -36,8 +38,6 @@ use crate::access_control::{
     add_verifier_role, is_verifier, remove_verifier_role, require_verifier,
 };
 
-use soroban_sdk::token::TokenClient;
-
 pub use batch::{BatchBondParams, BatchBondResult};
 pub use evidence::{Evidence, EvidenceType};
 
@@ -63,9 +63,6 @@ pub struct IdentityBond {
     pub withdrawal_requested_at: u64,
     pub notice_period_duration: u64,
 }
-
-// Re-export batch types
-pub use batch::{BatchBondParams, BatchBondResult};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -650,13 +647,18 @@ impl CredenceBond {
     }
 
     pub fn withdraw_bond(e: Env, amount: i128) -> IdentityBond {
+        Self::acquire_lock(&e);
         let key = DataKey::Bond;
         let mut bond = e
             .storage()
             .instance()
             .get::<_, IdentityBond>(&key)
-            .unwrap_or_else(|| panic!("no bond"));
+            .unwrap_or_else(|| {
+                Self::release_lock(&e);
+                panic!("no bond")
+            });
         if amount < 0 {
+            Self::release_lock(&e);
             panic!("amount must be non-negative");
         }
         bond.identity.require_auth();
@@ -664,6 +666,7 @@ impl CredenceBond {
         let end = bond.bond_start.saturating_add(bond.bond_duration);
         if bond.is_rolling {
             if bond.withdrawal_requested_at == 0 {
+                Self::release_lock(&e);
                 panic!("cooldown window not elapsed; request_withdrawal first");
             }
             if !rolling_bond::can_withdraw_after_notice(
@@ -671,9 +674,11 @@ impl CredenceBond {
                 bond.withdrawal_requested_at,
                 bond.notice_period_duration,
             ) {
+                Self::release_lock(&e);
                 panic!("cooldown window not elapsed; request_withdrawal first");
             }
         } else if now < end {
+            Self::release_lock(&e);
             panic!("lock-up period not elapsed; use withdraw_early");
         }
         let available = bond
@@ -681,22 +686,26 @@ impl CredenceBond {
             .checked_sub(bond.slashed_amount)
             .expect("slashed exceeds bonded");
         if amount > available {
+            Self::release_lock(&e);
             panic!("insufficient balance for withdrawal");
         }
         token_integration::transfer_from_contract(&e, &bond.identity, amount);
         let old_tier = tiered_bond::get_tier_for_amount(bond.bonded_amount);
         bond.bonded_amount = bond.bonded_amount.checked_sub(amount).expect("underflow");
         if bond.slashed_amount > bond.bonded_amount {
+            Self::release_lock(&e);
             panic!("slashed amount exceeds bonded amount");
         }
         let new_tier = tiered_bond::get_tier_for_amount(bond.bonded_amount);
         tiered_bond::emit_tier_change_if_needed(&e, &bond.identity, old_tier, new_tier);
         e.storage().instance().set(&key, &bond);
         events::emit_bond_withdrawn(&e, &bond.identity, amount, bond.bonded_amount);
+        Self::release_lock(&e);
         bond
     }
 
     pub fn withdraw_early(e: Env, amount: i128) -> IdentityBond {
+        Self::acquire_lock(&e);
         let key = DataKey::Bond;
         let mut bond = e
             .storage()
@@ -704,12 +713,14 @@ impl CredenceBond {
             .get::<_, IdentityBond>(&key)
             .unwrap_or_else(|| panic!("no bond"));
         if amount < 0 {
+            Self::release_lock(&e);
             panic!("amount must be non-negative");
         }
         bond.identity.require_auth();
         let now = e.ledger().timestamp();
         let end = bond.bond_start.saturating_add(bond.bond_duration);
         if now >= end {
+            Self::release_lock(&e);
             panic!("use withdraw for post lock-up");
         }
         let available = bond
@@ -717,6 +728,7 @@ impl CredenceBond {
             .checked_sub(bond.slashed_amount)
             .expect("slashed exceeds bonded");
         if amount > available {
+            Self::release_lock(&e);
             panic!("insufficient balance for withdrawal");
         }
         let (treasury, penalty_bps) = early_exit_penalty::get_config(&e);
@@ -743,7 +755,7 @@ impl CredenceBond {
             let refund_amount = penalty / 2;
             if refund_amount > 0 {
                 // Get next penalty ID for tracking
-                let penalty_id = get_next_penalty_id(&e);
+                let penalty_id = Self::get_next_penalty_id(&e);
                 
                 claims::add_pending_claim(
                     &e,
@@ -759,11 +771,13 @@ impl CredenceBond {
         let old_tier = tiered_bond::get_tier_for_amount(bond.bonded_amount);
         bond.bonded_amount = bond.bonded_amount.checked_sub(amount).expect("underflow");
         if bond.slashed_amount > bond.bonded_amount {
+            Self::release_lock(&e);
             panic!("slashed exceeds bonded");
         }
         let new_tier = tiered_bond::get_tier_for_amount(bond.bonded_amount);
         tiered_bond::emit_tier_change_if_needed(&e, &bond.identity, old_tier, new_tier);
         e.storage().instance().set(&key, &bond);
+        Self::release_lock(&e);
         bond
     }
 
@@ -1314,15 +1328,20 @@ impl CredenceBond {
 
     pub fn execute_cooldown_withdrawal(e: Env, requester: Address) -> IdentityBond {
         requester.require_auth();
+        Self::acquire_lock(&e);
         let req_key = DataKey::CooldownReq(requester.clone());
         let request: CooldownRequest = e
             .storage()
             .instance()
             .get(&req_key)
-            .unwrap_or_else(|| panic!("no cooldown request"));
+            .unwrap_or_else(|| {
+                Self::release_lock(&e);
+                panic!("no cooldown request")
+            });
         let period = cooldown::get_cooldown_period(&e);
         let now = e.ledger().timestamp();
         if !cooldown::can_withdraw(now, request.requested_at, period) {
+            Self::release_lock(&e);
             panic!("cooldown period has not elapsed");
         }
         let bond_key = DataKey::Bond;
@@ -1330,12 +1349,16 @@ impl CredenceBond {
             .storage()
             .instance()
             .get::<_, IdentityBond>(&bond_key)
-            .unwrap_or_else(|| panic!("no bond"));
+            .unwrap_or_else(|| {
+                Self::release_lock(&e);
+                panic!("no bond")
+            });
         let available = bond
             .bonded_amount
             .checked_sub(bond.slashed_amount)
             .expect("slashed exceeds bonded");
         if request.amount > available {
+            Self::release_lock(&e);
             panic!("insufficient balance for withdrawal");
         }
         bond.bonded_amount = bond
@@ -1343,11 +1366,13 @@ impl CredenceBond {
             .checked_sub(request.amount)
             .expect("underflow");
         if bond.slashed_amount > bond.bonded_amount {
+            Self::release_lock(&e);
             panic!("slashed exceeds bonded after withdrawal");
         }
         e.storage().instance().set(&bond_key, &bond);
         e.storage().instance().remove(&req_key);
         cooldown::emit_cooldown_executed(&e, &requester, request.amount);
+        Self::release_lock(&e);
         bond
     }
 
@@ -1414,45 +1439,6 @@ impl CredenceBond {
     }
 }
 
-#[cfg(test)]
-mod test_helpers;
-
-#[cfg(test)]
-mod test;
-
-#[cfg(test)]
-mod test_reentrancy;
-
-#[cfg(test)]
-mod test_attestation;
-
-#[cfg(test)]
-mod test_batch;
-
-#[cfg(test)]
-mod test_attestation_types;
-
-#[cfg(test)]
-mod test_validation;
-
-#[cfg(test)]
-mod test_governance_approval;
-
-#[cfg(test)]
-mod test_parameters;
-
-#[cfg(test)]
-mod test_fees;
-
-#[cfg(test)]
-mod integration;
-
-#[cfg(test)]
-mod test_increase_bond;
-
-#[cfg(test)]
-mod security;
-
 // Pause mechanism entrypoints
 #[contractimpl]
 impl CredenceBond {
@@ -1489,11 +1475,14 @@ mod security;
 mod test;
 #[cfg(test)]
 mod test_access_control;
-
+#[cfg(test)]
+mod test_attestation;
+#[cfg(test)]
+mod test_attestation_types;
+#[cfg(test)]
+mod test_batch;
 #[cfg(test)]
 mod test_cooldown;
-#[cfg(test)]
-mod test_duration_validation;
 #[cfg(test)]
 mod test_early_exit_penalty;
 #[cfg(test)]
@@ -1521,6 +1510,10 @@ mod test_pausable;
 #[cfg(test)]
 mod test_reentrancy;
 #[cfg(test)]
+mod test_reentrancy_bug_exploration;
+#[cfg(test)]
+mod test_reentrancy_preservation;
+#[cfg(test)]
 mod test_replay_prevention;
 #[cfg(test)]
 mod test_rolling_bond;
@@ -1536,7 +1529,5 @@ mod test_verifier;
 mod test_weighted_attestation;
 #[cfg(test)]
 mod test_withdraw_bond;
-#[cfg(test)]
-mod test_grace_window; // new test module from your commit
 #[cfg(test)]
 mod token_integration_test;
