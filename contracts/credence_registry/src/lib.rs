@@ -131,6 +131,11 @@ impl CredenceRegistry {
 
         admin.require_auth();
 
+        // Validate that bond_contract is a deployed contract with code
+        if bond_contract.is_nonce(&e) {
+            panic_with_error!(&e, ContractError::InvalidContractAddress);
+        }
+        
         // ERC165-equivalent interface check
         if !allow_non_interface {
             let supported: bool = e

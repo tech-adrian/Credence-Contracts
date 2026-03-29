@@ -222,6 +222,11 @@ pub enum ContractError {
     /// Contracts: registry
     AlreadyActive = 405,
 
+    /// Provided contract address is not a deployed contract.
+    /// Replaces: panic!("invalid contract address")
+    /// Contracts: registry
+    InvalidContractAddress = 406,
+
     // --- Delegation (500-599) ---
     /// Delegation expiry timestamp must be in the future.
     /// Replaces: panic!("expiry must be in the future")
@@ -332,7 +337,8 @@ impl ErrorExt for ContractError {
             | ContractError::IdentityNotRegistered
             | ContractError::BondContractNotRegistered
             | ContractError::AlreadyDeactivated
-            | ContractError::AlreadyActive => ErrorCategory::Registry,
+            | ContractError::AlreadyActive
+            | ContractError::InvalidContractAddress => ErrorCategory::Registry,
 
             ContractError::ExpiryInPast
             | ContractError::DelegationNotFound
@@ -399,6 +405,7 @@ impl ErrorExt for ContractError {
             }
             ContractError::AlreadyDeactivated => "Record is already in the deactivated state",
             ContractError::AlreadyActive => "Record is already in the active state",
+            ContractError::InvalidContractAddress => "Provided contract address is not a deployed contract",
             ContractError::ExpiryInPast => "Delegation expiry must be in the future",
             ContractError::DelegationNotFound => "No delegation found for the given key",
             ContractError::AlreadyRevoked => "Delegation has already been revoked",
