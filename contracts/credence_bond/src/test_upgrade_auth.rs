@@ -1,8 +1,27 @@
 use soroban_sdk::{Address, Env, Vec};
 use crate::{
     upgrade_auth::{self, UpgradeRole, UpgradeStatus, UpgradeAuthorization, UpgradeProposal, UpgradeRecord},
-    test_utils::{create_test_env, create_test_address},
+    CredenceBondClient,
 };
+use soroban_sdk::testutils::Address as _;
+
+// Helper: register contract + admin, return (client, admin, contract_id).
+fn setup_with_contract(e: &Env) -> (CredenceBondClient<'_>, Address, Address) {
+    e.mock_all_auths();
+    let contract_id = e.register(CredenceBond, ());
+    let client = CredenceBondClient::new(e, &contract_id);
+    let admin = Address::generate(e);
+    client.initialize(&admin);
+    (client, admin, contract_id)
+}
+
+fn create_test_address(e: &Env) -> Address {
+    Address::generate(e)
+}
+
+fn create_test_env() -> Env {
+    Env::default()
+}
 
 #[test]
 fn test_upgrade_authorization_initialization() {

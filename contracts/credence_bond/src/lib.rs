@@ -66,9 +66,6 @@ pub struct IdentityBond {
     pub notice_period_duration: u64,
 }
 
-// Re-export batch types
-pub use batch::{BatchBondParams, BatchBondResult};
-
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Attestation {

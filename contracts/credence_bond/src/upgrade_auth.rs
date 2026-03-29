@@ -141,7 +141,7 @@ pub struct UpgradeRecord {
     /// Old implementation address
     pub old_implementation: Address,
     /// New implementation address
-    pub new_implementation,
+    pub new_implementation: Address,
     /// When the upgrade was executed
     pub executed_at: u64,
     /// Address that executed the upgrade
