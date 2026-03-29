@@ -93,6 +93,27 @@ fn get_max_staleness(e: &Env, asset: &Address) -> u64 {
         .unwrap_or(DEFAULT_MAX_STALENESS)
 }
 
+/// Validate receiver allowlist: panics if the allowlist is enabled and the
+/// recipient is not allowed. Default allowlist state is disabled.
+fn validate_receiver_allowed(e: &Env, recipient: &Address) {
+    let enabled: bool = e
+        .storage()
+        .instance()
+        .get::<_, bool>(&DataKey::ReceiverAllowlistEnabled)
+        .unwrap_or(false);
+    if !enabled {
+        return;
+    }
+    let allowed: bool = e
+        .storage()
+        .instance()
+        .get::<_, bool>(&DataKey::ReceiverAllowlist(recipient.clone()))
+        .unwrap_or(false);
+    if !allowed {
+        panic!("{}", ERR_UNAUTHORIZED_RECEIVER);
+    }
+}
+
 #[inline]
 fn validate_oracle(
     answer: i128,
@@ -193,6 +214,43 @@ impl FixedDurationBond {
         );
     }
 
+    /// Enable or disable the receiver allowlist. Default is disabled.
+    pub fn set_receiver_allowlist_enabled(e: Env, admin: Address, enabled: bool) {
+        require_admin(&e, &admin);
+        e.storage()
+            .instance()
+            .set(&DataKey::ReceiverAllowlistEnabled, &enabled);
+        e.events().publish(
+            (Symbol::new(&e, "receiver_allowlist_toggled"),),
+            (enabled,),
+        );
+    }
+
+    /// Allow a receiver address to receive protocol-controlled funds when the
+    /// allowlist is enabled.
+    pub fn allow_receiver(e: Env, admin: Address, receiver: Address) {
+        require_admin(&e, &admin);
+        e.storage()
+            .instance()
+            .set(&DataKey::ReceiverAllowlist(receiver.clone()), &true);
+        e.events().publish(
+            (Symbol::new(&e, "receiver_allowed"),),
+            (receiver,),
+        );
+    }
+
+    /// Revoke an allowed receiver.
+    pub fn revoke_receiver(e: Env, admin: Address, receiver: Address) {
+        require_admin(&e, &admin);
+        e.storage()
+            .instance()
+            .set(&DataKey::ReceiverAllowlist(receiver.clone()), &false);
+        e.events().publish(
+            (Symbol::new(&e, "receiver_revoked"),),
+            (receiver,),
+        );
+    }
+
     /// Collect all accrued creation fees to the admin or treasury.
     /// Transfers the fee balance to `recipient` and resets the counter.
     pub fn collect_fees(e: Env, admin: Address, recipient: Address) -> i128 {
@@ -207,6 +265,9 @@ impl FixedDurationBond {
         }
         // CEI: clear state before transfer.
         e.storage().instance().set(&DataKey::AccruedFees, &0_i128);
+
+        // Guard: validate recipient against allowlist if enabled (Phase 1: only collect_fees)
+        validate_receiver_allowed(&e, &recipient);
 
         let token = get_token(&e);
         let contract = e.current_contract_address();

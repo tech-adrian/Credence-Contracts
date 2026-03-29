@@ -360,6 +360,43 @@ fn test_collect_fees() {
 }
 
 #[test]
+fn test_collect_fees_allowlist_enabled_allowed() {
+    let e = Env::default();
+    let (client, admin, owner, token_addr, _cid) = setup(&e);
+
+    let treasury = Address::generate(&e);
+    client.set_fee_config(&admin, &treasury, &100_u32); // 1% fee
+
+    // enable allowlist and allow recipient
+    client.set_receiver_allowlist_enabled(&admin, &true);
+    let recipient = Address::generate(&e);
+    client.allow_receiver(&admin, &recipient);
+
+    client.create_bond(&owner, &10_000_i128, &ONE_DAY);
+    let tok = TokenClient::new(&e, &token_addr);
+    let before = tok.balance(&recipient);
+    client.collect_fees(&admin, &recipient);
+    assert_eq!(tok.balance(&recipient) - before, 100);
+}
+
+#[test]
+#[should_panic(expected = "unauthorized receiver")]
+fn test_collect_fees_allowlist_enabled_not_allowed() {
+    let e = Env::default();
+    let (client, admin, owner, token_addr, _cid) = setup(&e);
+
+    let treasury = Address::generate(&e);
+    client.set_fee_config(&admin, &treasury, &100_u32); // 1% fee
+
+    // enable allowlist but do not allow the recipient
+    client.set_receiver_allowlist_enabled(&admin, &true);
+    let recipient = Address::generate(&e);
+
+    client.create_bond(&owner, &10_000_i128, &ONE_DAY);
+    client.collect_fees(&admin, &recipient);
+}
+
+#[test]
 #[should_panic(expected = "no fees to collect")]
 fn test_collect_fees_when_none_panics() {
     let e = Env::default();

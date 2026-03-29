@@ -58,6 +58,10 @@ pub enum DataKey {
     OracleSafety(Address),
     /// Per-asset maximum allowed oracle answer staleness in seconds.
     OracleStaleness(Address),
+    /// Whether the receiver allowlist is enabled (bool)
+    ReceiverAllowlistEnabled,
+    /// Per-address receiver allowlist mapping.
+    ReceiverAllowlist(Address),
     /// Default early-exit penalty in basis points.
     PenaltyBps,
     /// Per-owner active bond.
