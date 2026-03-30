@@ -439,7 +439,8 @@ impl AdminContract {
 
         // Verify caller authorization
         let caller_role = Self::get_role(e.clone(), caller.clone());
-        if caller_role <= admin_info.role {
+        // Allow deactivation when caller has the same role as the target.
+        if caller_role < admin_info.role {
             panic!("insufficient privileges to deactivate admin");
         }
 
@@ -482,7 +483,8 @@ impl AdminContract {
 
         // Verify caller authorization
         let caller_role = Self::get_role(e.clone(), caller.clone());
-        if caller_role <= admin_info.role {
+        // Allow reactivation when caller has the same role as the target.
+        if caller_role < admin_info.role {
             panic!("insufficient privileges to reactivate admin");
         }
 

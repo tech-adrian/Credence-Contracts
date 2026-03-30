@@ -99,7 +99,11 @@ pub fn emit_claims_processed(
     _processed_claims: &soroban_sdk::Vec<crate::claims::PendingClaim>,
 ) {
     let topics = (Symbol::new(e, "claims_processed"), user.clone());
-    let data = (result.processed_count, result.total_amount, result.claim_types.clone());
+    let data = (
+        result.processed_count,
+        result.total_amount,
+        result.claim_types.clone(),
+    );
     e.events().publish(topics, data);
 }
 
