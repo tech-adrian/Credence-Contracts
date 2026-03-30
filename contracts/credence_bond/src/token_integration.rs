@@ -75,6 +75,9 @@ pub fn require_allowance(e: &Env, owner: &Address, amount: i128) {
         return;
     }
     let contract = e.current_contract_address();
+    if *owner == contract {
+        panic!("self-approval is not allowed");
+    }
     let allowance = token_client(e).allowance(owner, &contract);
     if allowance < amount {
         panic!("insufficient token allowance");
