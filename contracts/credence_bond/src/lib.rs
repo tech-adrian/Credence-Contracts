@@ -15,6 +15,7 @@ pub mod evidence;
 mod fees;
 pub mod governance_approval;
 mod leverage;
+pub mod liquidation_scanner;
 #[allow(dead_code)]
 mod math;
 mod nonce;
@@ -1477,8 +1478,58 @@ impl CredenceBond {
     pub fn execute_pause_proposal(e: Env, proposal_id: u64) {
         pausable::execute_pause_proposal(&e, proposal_id)
     }
+
+    // -------------------------------------------------------------------------
+    // Liquidation Scanner (issue #180)
+    // -------------------------------------------------------------------------
+
+    /// Register a bond holder in the liquidation scanner registry.
+    pub fn register_bond_holder(e: Env, admin: Address, identity: Address) {
+        let stored: Address = e.storage().instance().get(&DataKey::Admin)
+            .unwrap_or_else(|| panic!("not initialized"));
+        if stored != admin { panic!("not admin"); }
+        admin.require_auth();
+        liquidation_scanner::register_bond_holder(&e, &identity);
+    }
+
+    /// Deregister a bond holder from the liquidation scanner registry.
+    pub fn deregister_bond_holder(e: Env, admin: Address, identity: Address) {
+        let stored: Address = e.storage().instance().get(&DataKey::Admin)
+            .unwrap_or_else(|| panic!("not initialized"));
+        if stored != admin { panic!("not admin"); }
+        admin.require_auth();
+        liquidation_scanner::deregister_bond_holder(&e, &identity);
+    }
+
+    /// Get total registered bond holders.
+    pub fn get_registry_size(e: Env) -> u32 {
+        liquidation_scanner::get_registry_size(&e)
+    }
+
+    /// Get the on-chain cursor for a keeper.
+    pub fn get_keeper_cursor(e: Env, keeper: Address) -> u32 {
+        liquidation_scanner::get_keeper_cursor(&e, &keeper)
+    }
+
+    /// Scan a bounded page of bond holders for liquidation candidates.
+    pub fn scan_liquidation_candidates(
+        e: Env,
+        keeper: Address,
+        cursor: u32,
+        max_iter: u32,
+        min_slash_ratio_bps: u32,
+    ) -> liquidation_scanner::ScanResult {
+        liquidation_scanner::scan_liquidation_candidates(&e, &keeper, cursor, max_iter, min_slash_ratio_bps)
+    }
+
+    /// Advance the keeper cursor (tamper-resistant).
+    pub fn advance_keeper_cursor(e: Env, keeper: Address, next_cursor: u32) {
+        liquidation_scanner::advance_keeper_cursor(&e, &keeper, next_cursor);
+    }
 }
 
+#[cfg(test)]
+mod test_liquidation_scanner;
 #[cfg(test)]
 mod fuzz;
 #[cfg(test)]
