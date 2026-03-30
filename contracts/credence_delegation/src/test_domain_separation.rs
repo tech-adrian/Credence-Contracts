@@ -361,13 +361,7 @@ fn partial_nonce_invalidation_skips_range_and_allows_next_nonce() {
         &p0,
     );
     let p1 = make_payload(&e, DomainTag::Delegate, &owner, &delegate, &contract_id, 1);
-    client.execute_delegated_delegate(
-        &owner,
-        &delegate,
-        &DelegationType::Management,
-        &expiry,
-        &p1,
-    );
+    client.execute_delegated_delegate(&owner, &delegate, &DelegationType::Management, &expiry, &p1);
     assert_eq!(client.get_nonce(&owner), 2);
 
     // Invalidate [2, 4): nonce 2 and 3 become unusable.

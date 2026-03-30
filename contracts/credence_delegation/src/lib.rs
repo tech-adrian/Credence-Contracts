@@ -293,12 +293,8 @@ impl CredenceDelegation {
     /// - Range size is capped to keep gas predictable.
     pub fn invalidate_nonce_range(e: Env, identity: Address, new_nonce: u64) {
         identity.require_auth();
-        let (from_nonce, to_nonce) = nonce::invalidate_nonce_range(
-            &e,
-            &identity,
-            new_nonce,
-            MAX_NONCE_INVALIDATION_SPAN,
-        );
+        let (from_nonce, to_nonce) =
+            nonce::invalidate_nonce_range(&e, &identity, new_nonce, MAX_NONCE_INVALIDATION_SPAN);
         e.events().publish(
             (Symbol::new(&e, "nonce_invalidated"), identity),
             (from_nonce, to_nonce),

@@ -48,9 +48,7 @@ mod ownership_transfer_tests {
         let env = Env::default();
         let (contract_address, super_admin) = setup_contract(&env);
 
-        let owner = env.as_contract(&contract_address, || {
-            AdminContract::get_owner(env.clone())
-        });
+        let owner = env.as_contract(&contract_address, || AdminContract::get_owner(env.clone()));
 
         assert_eq!(owner, super_admin);
     }
@@ -70,8 +68,7 @@ mod ownership_transfer_tests {
     #[test]
     fn test_transfer_ownership_sets_pending_owner() {
         let env = Env::default();
-        let (contract_address, super_admin_1, super_admin_2) =
-            setup_multiple_super_admins(&env);
+        let (contract_address, super_admin_1, super_admin_2) = setup_multiple_super_admins(&env);
 
         env.mock_all_auths();
         env.as_contract(&contract_address, || {
@@ -92,8 +89,7 @@ mod ownership_transfer_tests {
     #[test]
     fn test_ownership_remains_with_current_owner_before_accept() {
         let env = Env::default();
-        let (contract_address, super_admin_1, super_admin_2) =
-            setup_multiple_super_admins(&env);
+        let (contract_address, super_admin_1, super_admin_2) = setup_multiple_super_admins(&env);
 
         env.mock_all_auths();
         env.as_contract(&contract_address, || {
@@ -104,9 +100,7 @@ mod ownership_transfer_tests {
             );
         });
 
-        let owner = env.as_contract(&contract_address, || {
-            AdminContract::get_owner(env.clone())
-        });
+        let owner = env.as_contract(&contract_address, || AdminContract::get_owner(env.clone()));
 
         // Owner should still be super_admin_1 until accept_ownership is called
         assert_eq!(owner, super_admin_1);
@@ -115,8 +109,7 @@ mod ownership_transfer_tests {
     #[test]
     fn test_accept_ownership_transfers_control() {
         let env = Env::default();
-        let (contract_address, super_admin_1, super_admin_2) =
-            setup_multiple_super_admins(&env);
+        let (contract_address, super_admin_1, super_admin_2) = setup_multiple_super_admins(&env);
 
         env.mock_all_auths();
         env.as_contract(&contract_address, || {
@@ -128,9 +121,7 @@ mod ownership_transfer_tests {
             AdminContract::accept_ownership(env.clone(), super_admin_2.clone());
         });
 
-        let owner = env.as_contract(&contract_address, || {
-            AdminContract::get_owner(env.clone())
-        });
+        let owner = env.as_contract(&contract_address, || AdminContract::get_owner(env.clone()));
 
         assert_eq!(owner, super_admin_2);
     }
@@ -138,8 +129,7 @@ mod ownership_transfer_tests {
     #[test]
     fn test_pending_owner_cleared_after_acceptance() {
         let env = Env::default();
-        let (contract_address, super_admin_1, super_admin_2) =
-            setup_multiple_super_admins(&env);
+        let (contract_address, super_admin_1, super_admin_2) = setup_multiple_super_admins(&env);
 
         env.mock_all_auths();
         env.as_contract(&contract_address, || {
@@ -162,8 +152,7 @@ mod ownership_transfer_tests {
     #[should_panic(expected = "only current owner can transfer ownership")]
     fn test_transfer_ownership_rejects_non_owner() {
         let env = Env::default();
-        let (contract_address, super_admin_1, super_admin_2) =
-            setup_multiple_super_admins(&env);
+        let (contract_address, super_admin_1, super_admin_2) = setup_multiple_super_admins(&env);
 
         let unauthorized_address = Address::generate(&env);
 
@@ -243,11 +232,7 @@ mod ownership_transfer_tests {
 
         env.mock_all_auths();
         env.as_contract(&contract_address, || {
-            AdminContract::transfer_ownership(
-                env.clone(),
-                super_admin.clone(),
-                non_admin.clone(),
-            );
+            AdminContract::transfer_ownership(env.clone(), super_admin.clone(), non_admin.clone());
         });
     }
 
@@ -281,8 +266,7 @@ mod ownership_transfer_tests {
     #[should_panic(expected = "new owner must be active")]
     fn test_transfer_ownership_rejects_inactive_admin() {
         let env = Env::default();
-        let (contract_address, super_admin_1, super_admin_2) =
-            setup_multiple_super_admins(&env);
+        let (contract_address, super_admin_1, super_admin_2) = setup_multiple_super_admins(&env);
 
         env.mock_all_auths();
         env.as_contract(&contract_address, || {
@@ -363,9 +347,8 @@ mod ownership_transfer_tests {
             AdminContract::accept_ownership(env.clone(), super_admin_3.clone());
         });
 
-        let final_owner = env.as_contract(&contract_address, || {
-            AdminContract::get_owner(env.clone())
-        });
+        let final_owner =
+            env.as_contract(&contract_address, || AdminContract::get_owner(env.clone()));
 
         assert_eq!(final_owner, super_admin_3);
     }
@@ -416,9 +399,8 @@ mod ownership_transfer_tests {
             AdminContract::accept_ownership(env.clone(), super_admin_3.clone());
         });
 
-        let final_owner = env.as_contract(&contract_address, || {
-            AdminContract::get_owner(env.clone())
-        });
+        let final_owner =
+            env.as_contract(&contract_address, || AdminContract::get_owner(env.clone()));
 
         assert_eq!(final_owner, super_admin_3);
     }

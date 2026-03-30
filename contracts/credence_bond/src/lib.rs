@@ -531,7 +531,7 @@ impl CredenceBond {
         let base_reward = 1000i128; // Base reward for attestation
         let weight_bonus = (weight as i128) * 100; // Bonus based on weight
         let total_reward = base_reward + weight_bonus;
-        
+
         claims::add_pending_claim(
             &e,
             &attester,
@@ -728,23 +728,23 @@ impl CredenceBond {
             penalty_bps,
         );
         early_exit_penalty::emit_penalty_event(&e, &bond.identity, amount, penalty, &treasury);
-        
+
         // Calculate net amount and transfer to user
         let net_amount = amount.checked_sub(penalty).expect("penalty exceeds amount");
         token_integration::transfer_from_contract(&e, &bond.identity, net_amount);
-        
-        // Instead of transferring penalty to treasury immediately, 
+
+        // Instead of transferring penalty to treasury immediately,
         // add a potential penalty refund claim for good behavior
         if penalty > 0 {
             // Transfer penalty to treasury (still push-based for treasury)
             token_integration::transfer_from_contract(&e, &treasury, penalty);
-            
+
             // Add a potential penalty refund claim (50% of penalty can be refunded for good behavior)
             let refund_amount = penalty / 2;
             if refund_amount > 0 {
                 // Get next penalty ID for tracking
                 let penalty_id = get_next_penalty_id(&e);
-                
+
                 claims::add_pending_claim(
                     &e,
                     &bond.identity,
@@ -755,7 +755,7 @@ impl CredenceBond {
                 );
             }
         }
-        
+
         let old_tier = tiered_bond::get_tier_for_amount(bond.bonded_amount);
         bond.bonded_amount = bond.bonded_amount.checked_sub(amount).expect("underflow");
         if bond.slashed_amount > bond.bonded_amount {
@@ -1400,11 +1400,7 @@ impl CredenceBond {
     }
 
     /// Process a limited number of claims for the caller
-    pub fn claim_rewards_batch(
-        e: Env,
-        user: Address,
-        max_claims: u32,
-    ) -> claims::ClaimResult {
+    pub fn claim_rewards_batch(e: Env, user: Address, max_claims: u32) -> claims::ClaimResult {
         claims::process_claims(&e, &user, soroban_sdk::Vec::new(&e), max_claims)
     }
 
@@ -1507,6 +1503,8 @@ mod test_fees;
 #[cfg(test)]
 mod test_governance_approval;
 #[cfg(test)]
+mod test_grace_period;
+#[cfg(test)]
 mod test_helpers;
 #[cfg(test)]
 mod test_increase_bond;
@@ -1536,7 +1534,5 @@ mod test_verifier;
 mod test_weighted_attestation;
 #[cfg(test)]
 mod test_withdraw_bond;
-#[cfg(test)]
-mod test_grace_window; // new test module from your commit
 #[cfg(test)]
 mod token_integration_test;
