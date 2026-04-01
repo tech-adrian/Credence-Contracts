@@ -29,8 +29,8 @@ pub const DEFAULT_ATTESTATION_WEIGHT: u32 = 1;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Attestation {
     pub id: u64,
-    pub verifier: Address,
-    pub identity: Address,
+    pub attester: Address,
+    pub subject: Address,
     pub timestamp: u64,
     pub weight: u32,
     pub attestation_data: String,
@@ -74,7 +74,7 @@ impl Attestation {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AttestationDedupKey {
-    pub verifier: Address,
-    pub identity: Address,
+    pub attester: Address,
+    pub subject: Address,
     pub attestation_data: String,
 }

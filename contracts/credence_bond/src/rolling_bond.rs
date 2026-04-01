@@ -8,7 +8,7 @@ use crate::IdentityBond;
 /// Returns true if the bond has passed its period end (bond_start + bond_duration).
 #[must_use]
 pub fn is_period_ended(now: u64, bond_start: u64, bond_duration: u64) -> bool {
-    let end = bond_start.saturating_add(bond_duration);
+    let end = period_end(bond_start, bond_duration);
     now >= end
 }
 
@@ -31,4 +31,10 @@ pub fn can_withdraw_after_notice(
 pub fn apply_renewal(bond: &mut IdentityBond, new_start: u64) {
     bond.bond_start = new_start;
     bond.withdrawal_requested_at = 0; // reset withdrawal request on renewal
+}
+
+/// Returns the period end timestamp (start + duration) using saturating add.
+#[must_use]
+pub fn period_end(start: u64, duration: u64) -> u64 {
+    start.saturating_add(duration)
 }

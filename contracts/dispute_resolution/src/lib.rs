@@ -205,10 +205,25 @@ impl DisputeContract {
         let current_time = env.ledger().timestamp();
         let deadline = current_time + resolution_deadline;
 
-        // Transfer stake into the contract — one storage-read-free cross-contract call.
+        // Transfer stake into the contract — verify balance delta to reject fee-on-transfer tokens.
         let token_client = soroban_sdk::token::Client::new(&env, &token);
         let contract_address = env.current_contract_address();
+
+        // Check balance before transfer
+        let balance_before = token_client.balance(&contract_address);
+
+        // Perform transfer
         token_client.transfer_from(&contract_address, &disputer, &contract_address, &stake);
+
+        // Verify balance increased by exactly the expected amount
+        let balance_after = token_client.balance(&contract_address);
+        let actual_received = balance_after
+            .checked_sub(balance_before)
+            .ok_or(Error::TransferFailed)?;
+
+        if actual_received != stake {
+            return Err(Error::TransferFailed);
+        }
 
         // Increment the global counter (instance storage — always loaded with the contract).
         let counter: u64 = env
@@ -337,7 +352,21 @@ impl DisputeContract {
         let contract_address = env.current_contract_address();
 
         let outcome = if dispute.votes_for_disputer > dispute.votes_for_slasher {
+            // Verify balance delta when returning stake to disputer
+            let balance_before = token_client.balance(&contract_address);
+            
             token_client.transfer(&contract_address, &dispute.disputer, &dispute.stake);
+            
+            // Verify balance decreased by exactly the expected amount
+            let balance_after = token_client.balance(&contract_address);
+            let actual_sent = balance_before
+                .checked_sub(balance_after)
+                .ok_or(Error::TransferFailed)?;
+
+            if actual_sent != dispute.stake {
+                return Err(Error::TransferFailed);
+            }
+
             DisputeOutcome::FavorDisputer
         } else {
             DisputeOutcome::FavorSlasher

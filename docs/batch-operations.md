@@ -165,11 +165,12 @@ assert_eq!(total, 3000); // Sum of all bond amounts
 The batch operations enforce the following validation rules:
 
 1. **Non-empty batch**: At least one bond must be provided
-2. **Positive amounts**: All bond amounts must be > 0
-3. **No overflow**: Bond end timestamps must not overflow u64
-4. **Rolling bonds**: Must have a notice_period_duration > 0
-5. **No duplicates**: Cannot create bond if one already exists for identity
-6. **Atomic validation**: ALL bonds must pass validation before ANY are created
+2. **Batch size cap**: No more than 20 bonds may be processed in one batch
+3. **Positive amounts**: All bond amounts must be > 0
+4. **No overflow**: Bond end timestamps must not overflow u64
+5. **Rolling bonds**: Must have a notice_period_duration > 0
+6. **No duplicates**: Cannot create bond if one already exists for identity
+7. **Atomic validation**: ALL bonds must pass validation before ANY are created
 
 ## Error Handling
 
@@ -178,6 +179,7 @@ All validation errors cause the entire batch to fail atomically:
 | Error | Condition |
 |-------|-----------|
 | `empty batch` | params_list is empty |
+| `batch too large` | params_list contains more than 20 bonds |
 | `invalid amount in batch` | Any amount ≤ 0 |
 | `duration overflow in batch` | timestamp + duration > u64::MAX |
 | `rolling bond requires notice period` | is_rolling=true but notice_period_duration=0 |
@@ -278,7 +280,7 @@ cargo test -p credence_bond test_batch
 Potential improvements for future versions:
 
 - **Partial success mode**: Option to skip invalid bonds instead of failing entire batch
-- **Batch limits**: Maximum bonds per batch for gas control
+- **Dynamic batch limits**: Tune the 20-bond cap per network profile if Soroban budgets change
 - **Progress callbacks**: Event emission for each bond created
 - **Batch updates**: Update multiple bonds atomically
 - **Batch withdrawals**: Withdraw from multiple bonds in one transaction

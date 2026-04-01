@@ -10,9 +10,8 @@
 //! - Comprehensive event emission
 //! - Gas-optimized claim operations
 
-use soroban_sdk::{contracttype, Address, Env, Map, Symbol, Vec};
 use crate::{events, DataKey};
-use crate::safe_token;
+use soroban_sdk::{contracttype, Address, Env, Map, Symbol, Vec};
 
 /// Maximum number of claims that can be processed in a single batch
 const MAX_BATCH_CLAIMS: u32 = 50;
@@ -40,6 +39,8 @@ pub enum ClaimType {
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct PendingClaim {
+    /// Unique claim ID
+    pub claim_id: u64,
     /// Type of claim
     pub claim_type: ClaimType,
     /// Amount to be claimed
@@ -52,6 +53,8 @@ pub struct PendingClaim {
     pub source_id: u64,
     /// Additional metadata (optional)
     pub metadata: Symbol,
+    /// Whether this claim has been processed
+    pub processed: bool,
 }
 
 /// Result of a claim operation
@@ -69,18 +72,23 @@ pub struct ClaimResult {
 /// Storage keys for claims
 impl DataKey {
     /// Pending claims for a user: DataKey::PendingClaims(user) -> Vec<PendingClaim>
-    pub const fn pending_claims(user: &Address) -> DataKey {
+    pub fn pending_claims(user: &Address) -> DataKey {
         DataKey::PendingClaims(user.clone())
     }
-    
+
     /// Total claimable amount for a user: DataKey::ClaimableAmount(user) -> i128
-    pub const fn claimable_amount(user: &Address) -> DataKey {
+    pub fn claimable_amount(user: &Address) -> DataKey {
         DataKey::ClaimableAmount(user.clone())
     }
-    
+
     /// Claim history counter: DataKey::ClaimCounter -> u64
-    pub const fn claim_counter() -> DataKey {
+    pub fn claim_counter() -> DataKey {
         DataKey::ClaimCounter
+    }
+    
+    /// Individual claim by ID: DataKey::ClaimById(claim_id) -> PendingClaim
+    pub const fn claim_by_id(claim_id: u64) -> DataKey {
+        DataKey::ClaimById(claim_id)
     }
 }
 
@@ -103,22 +111,32 @@ pub fn add_pending_claim(
     amount: i128,
     source_id: u64,
     metadata: Option<Symbol>,
-) {
+) -> u64 {
     if amount <= 0 {
         panic!("claim amount must be positive");
     }
 
+    // Get next claim ID
+    let claim_id = get_next_claim_id(e);
+    
     let now = e.ledger().timestamp();
     let expires_at = now + DEFAULT_CLAIM_EXPIRY;
-    
+
     let claim = PendingClaim {
+        claim_id,
         claim_type,
         amount,
         created_at: now,
         expires_at,
         source_id,
         metadata: metadata.unwrap_or(Symbol::new(e, "")),
+        processed: false,
     };
+
+    // Store claim by ID for direct access
+    e.storage()
+        .persistent()
+        .set(&DataKey::ClaimById(claim_id), &claim.clone());
 
     // Get existing claims or create new vector
     let mut claims: Vec<PendingClaim> = e
@@ -126,31 +144,47 @@ pub fn add_pending_claim(
         .persistent()
         .get(&DataKey::PendingClaims(user.clone()))
         .unwrap_or(Vec::new(e));
-    
+
     claims.push_back(claim.clone());
-    
+
     // Update storage
     e.storage()
         .persistent()
         .set(&DataKey::PendingClaims(user.clone()), &claims);
-    
+
     // Update total claimable amount
     let current_total: i128 = e
         .storage()
         .persistent()
         .get(&DataKey::ClaimableAmount(user.clone()))
         .unwrap_or(0);
-    
+
     let new_total = current_total
         .checked_add(amount)
         .expect("claimable amount overflow");
-    
+
     e.storage()
         .persistent()
         .set(&DataKey::ClaimableAmount(user.clone()), &new_total);
 
     // Emit event
     events::emit_claim_added(e, user, &claim);
+    
+    claim_id
+}
+
+/// Get the next claim ID
+fn get_next_claim_id(e: &Env) -> u64 {
+    let current: u64 = e
+        .storage()
+        .persistent()
+        .get(&DataKey::ClaimCounter)
+        .unwrap_or(0);
+    let next = current.checked_add(1).expect("claim counter overflow");
+    e.storage()
+        .persistent()
+        .set(&DataKey::ClaimCounter, &next);
+    next
 }
 
 /// Get all pending claims for a user
@@ -207,7 +241,7 @@ pub fn process_claims(
 
     let now = e.ledger().timestamp();
     let mut claims = get_pending_claims(e, user);
-    
+
     if claims.is_empty() {
         panic!("no pending claims");
     }
@@ -228,7 +262,11 @@ pub fn process_claims(
     let mut remaining_claims = Vec::new(e);
     let mut total_amount = 0i128;
     let mut processed_types = Vec::new(e);
-    let limit = if max_claims == 0 { MAX_BATCH_CLAIMS } else { max_claims.min(MAX_BATCH_CLAIMS) };
+    let limit = if max_claims == 0 {
+        MAX_BATCH_CLAIMS
+    } else {
+        max_claims.min(MAX_BATCH_CLAIMS)
+    };
 
     // Process claims
     for i in 0..claims.len() {
@@ -241,24 +279,24 @@ pub fn process_claims(
         }
 
         let claim = claims.get(i).unwrap();
-        
+
         // Skip expired claims
         if claim.expires_at > 0 && now > claim.expires_at {
             continue;
         }
-        
+
         // Skip if not in filter
         if filter_types && !type_set.contains_key(claim.claim_type) {
             remaining_claims.push_back(claim);
             continue;
         }
-        
+
         // Process this claim
         processed_claims.push_back(claim.clone());
         total_amount = total_amount
             .checked_add(claim.amount)
             .expect("claim total overflow");
-        
+
         // Track unique claim types
         let mut type_exists = false;
         for j in 0..processed_types.len() {
@@ -288,11 +326,11 @@ pub fn process_claims(
         e.storage()
             .persistent()
             .set(&DataKey::PendingClaims(user.clone()), &remaining_claims);
-        
+
         let remaining_amount = get_claimable_amount(e, user)
             .checked_sub(total_amount)
             .expect("claimable amount underflow");
-        
+
         e.storage()
             .persistent()
             .set(&DataKey::ClaimableAmount(user.clone()), &remaining_amount);
@@ -300,7 +338,14 @@ pub fn process_claims(
 
     // Transfer tokens to user using safe token operations
     if total_amount > 0 {
-        safe_token::safe_transfer(e, user, total_amount);
+        let token: Address = e
+            .storage()
+            .instance()
+            .get(&DataKey::BondToken)
+            .expect("token not configured");
+
+        let contract = e.current_contract_address();
+        soroban_sdk::token::TokenClient::new(e, &token).transfer(&contract, user, &total_amount);
     }
 
     let result = ClaimResult {
@@ -326,7 +371,7 @@ pub fn process_claims(
 pub fn cleanup_expired_claims(e: &Env, user: &Address) -> u32 {
     let now = e.ledger().timestamp();
     let claims = get_pending_claims(e, user);
-    
+
     if claims.is_empty() {
         return 0;
     }
@@ -337,7 +382,7 @@ pub fn cleanup_expired_claims(e: &Env, user: &Address) -> u32 {
 
     for i in 0..claims.len() {
         let claim = claims.get(i).unwrap();
-        
+
         if claim.expires_at > 0 && now > claim.expires_at {
             expired_amount = expired_amount
                 .checked_add(claim.amount)
@@ -361,11 +406,11 @@ pub fn cleanup_expired_claims(e: &Env, user: &Address) -> u32 {
             e.storage()
                 .persistent()
                 .set(&DataKey::PendingClaims(user.clone()), &valid_claims);
-            
+
             let remaining_amount = get_claimable_amount(e, user)
                 .checked_sub(expired_amount)
                 .expect("claimable amount underflow");
-            
+
             e.storage()
                 .persistent()
                 .set(&DataKey::ClaimableAmount(user.clone()), &remaining_amount);
@@ -389,12 +434,12 @@ pub fn cleanup_expired_claims(e: &Env, user: &Address) -> u32 {
 pub fn get_claims_summary(e: &Env, user: &Address) -> Map<ClaimType, i128> {
     let claims = get_pending_claims(e, user);
     let mut summary = Map::new(e);
-    
+
     for i in 0..claims.len() {
         let claim = claims.get(i).unwrap();
         let current = summary.get(claim.claim_type).unwrap_or(0);
         summary.set(claim.claim_type, current + claim.amount);
     }
-    
+
     summary
 }

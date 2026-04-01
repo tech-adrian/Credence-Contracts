@@ -120,7 +120,7 @@ pub fn slash_bond(e: &Env, admin: &Address, amount: i128) -> crate::IdentityBond
     } else {
         amount
     };
-    
+
     bond.slashed_amount = if new_slashed > bond.bonded_amount {
         bond.bonded_amount
     } else {
@@ -133,7 +133,7 @@ pub fn slash_bond(e: &Env, admin: &Address, amount: i128) -> crate::IdentityBond
         if reward_amount > 0 {
             // Get next source ID for tracking
             let source_id = get_next_slash_id(e);
-            
+
             crate::claims::add_pending_claim(
                 e,
                 admin,

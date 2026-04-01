@@ -131,6 +131,13 @@ impl CredenceRegistry {
 
         admin.require_auth();
 
+        // Validate that bond_contract is not a zero address
+        // Check for zero address (invalid contract address)
+        let zero_addr = Address::from_array(&e, [0u8; 32]);
+        if bond_contract == zero_addr {
+            panic_with_error!(&e, ContractError::InvalidContractAddress);
+        }
+        
         // ERC165-equivalent interface check
         if !allow_non_interface {
             let supported: bool = e

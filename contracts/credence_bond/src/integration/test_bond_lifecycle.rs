@@ -48,12 +48,12 @@ fn test_lifecycle_create_topup_withdraw() {
     let (client, _admin, identity) = setup(&e);
     let duration = 86400_u64;
     client.create_bond_with_rolling(&identity, &1000_i128, &duration, &false, &0_u64);
-    let after_topup = client.top_up(&300_i128);
-    assert_eq!(after_topup.bonded_amount, 1300);
+    let after_topup = client.top_up(&1000_i128);
+    assert_eq!(after_topup.bonded_amount, 2000);
 
     // Advance past lock-up before withdrawing.
     e.ledger().with_mut(|li| li.timestamp = duration + 1);
-    client.withdraw(&1300_i128);
+    client.withdraw(&2000_i128);
     let state = client.get_identity_state();
     assert_eq!(state.bonded_amount, 0);
 }
@@ -84,12 +84,12 @@ fn test_lifecycle_create_topup_slash_withdraw() {
     let (client, admin, identity) = setup(&e);
     let duration = 86400_u64;
     client.create_bond_with_rolling(&identity, &1000_i128, &duration, &false, &0_u64);
-    client.top_up(&500_i128);
+    client.top_up(&1000_i128);
     client.slash(&admin, &300_i128);
     let state = client.get_identity_state();
-    assert_eq!(state.bonded_amount, 1500);
+    assert_eq!(state.bonded_amount, 2000);
     assert_eq!(state.slashed_amount, 300);
-    let available = 1500 - 300;
+    let available = 2000 - 300;
     // Advance past lock-up before withdrawing.
     e.ledger().with_mut(|li| li.timestamp = duration + 1);
     client.withdraw(&available);

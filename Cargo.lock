@@ -380,6 +380,7 @@ name = "credence_treasury"
 version = "0.1.0"
 dependencies = [
  "credence_errors",
+ "ethnum",
  "soroban-sdk 22.0.10",
 ]
 

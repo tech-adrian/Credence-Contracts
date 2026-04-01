@@ -6,6 +6,7 @@
 
 #![cfg(test)]
 
+use super::parameters::DEFAULT_MAX_LEVERAGE;
 use super::validation::{validate_bond_amount, MAX_BOND_AMOUNT, MIN_BOND_AMOUNT};
 use super::{CredenceBond, CredenceBondClient};
 use crate::test_helpers;
@@ -89,9 +90,10 @@ fn test_create_bond_with_valid_amount() {
     assert_eq!(bond.bonded_amount, MIN_BOND_AMOUNT);
     assert!(bond.active);
 
-    // Test with maximum valid amount
-    let bond2 = client.create_bond(&identity, &MAX_BOND_AMOUNT, &86400_u64);
-    assert_eq!(bond2.bonded_amount, MAX_BOND_AMOUNT);
+    // Test with the largest amount allowed under the default leverage cap.
+    let leverage_valid_amount = DEFAULT_MAX_LEVERAGE as i128 * MIN_BOND_AMOUNT;
+    let bond2 = client.create_bond(&identity, &leverage_valid_amount, &86400_u64);
+    assert_eq!(bond2.bonded_amount, leverage_valid_amount);
     assert!(bond2.active);
 }
 
@@ -150,7 +152,7 @@ fn test_top_up_with_valid_amount() {
 }
 
 #[test]
-#[should_panic(expected = "amount must be positive")]
+#[should_panic(expected = "top-up amount below minimum required")]
 fn test_top_up_with_zero_amount() {
     let e = Env::default();
     let (client, _admin, identity) = setup_with_token(&e);
@@ -163,7 +165,7 @@ fn test_top_up_with_zero_amount() {
 }
 
 #[test]
-#[should_panic(expected = "amount must be positive")]
+#[should_panic(expected = "top-up amount below minimum required")]
 fn test_top_up_with_negative_amount() {
     let e = Env::default();
     let (client, _admin, identity) = setup_with_token(&e);
@@ -235,7 +237,7 @@ fn test_create_bond_then_top_up_valid_scenario() {
 }
 
 #[test]
-#[should_panic(expected = "amount must be positive")]
+#[should_panic(expected = "top-up amount below minimum required")]
 fn test_create_bond_with_min_amount_then_invalid_top_up() {
     let e = Env::default();
     let (client, _admin, identity) = setup_with_token(&e);

@@ -1,10 +1,49 @@
 #![cfg(test)]
 
-use crate::{test_helpers::setup_with_token, BatchBondParams, CredenceBond, CredenceBondClient};
+extern crate std;
+
+use crate::{
+    test_helpers::setup_with_token, BatchBondParams, CredenceBond, CredenceBondClient,
+    MAX_BATCH_BOND_SIZE,
+};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     Address, Env, Vec,
 };
+
+fn build_valid_batch(env: &Env, count: u32) -> Vec<BatchBondParams> {
+    let mut params_list = Vec::new(env);
+
+    for index in 0..count {
+        params_list.push_back(BatchBondParams {
+            identity: Address::generate(env),
+            amount: 1000 + i128::from(index),
+            duration: 86_400 + u64::from(index),
+            is_rolling: index % 2 == 0,
+            notice_period_duration: if index % 2 == 0 { 3600 } else { 0 },
+        });
+    }
+
+    params_list
+}
+
+fn batch_create_cost(n: u32) -> (u64, u64) {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(CredenceBond, ());
+    let client = CredenceBondClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let params_list = build_valid_batch(&env, n);
+
+    env.cost_estimate().budget().reset_default();
+    let result = client.create_batch_bonds(&params_list);
+    assert_eq!(result.created_count, n);
+
+    let budget = env.cost_estimate().budget();
+    (budget.cpu_instruction_cost(), budget.memory_bytes_cost())
+}
 
 #[test]
 fn test_create_single_bond_in_batch() {
@@ -81,6 +120,36 @@ fn test_create_multiple_bonds_in_batch() {
     // This test verifies the batch interface works correctly
     // In production with per-identity bonds, all 3 would be created
     assert_eq!(params_list.len(), 3);
+}
+
+#[test]
+fn test_create_batch_bonds_at_max_batch_size() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(CredenceBond, ());
+    let client = CredenceBondClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let params_list = build_valid_batch(&env, MAX_BATCH_BOND_SIZE);
+    let result = client.create_batch_bonds(&params_list);
+
+    assert_eq!(result.created_count, MAX_BATCH_BOND_SIZE);
+    assert_eq!(result.bonds.len(), MAX_BATCH_BOND_SIZE);
+}
+
+#[test]
+#[should_panic(expected = "batch too large")]
+fn test_create_batch_bonds_above_max_batch_size_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(CredenceBond, ());
+    let client = CredenceBondClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let params_list = build_valid_batch(&env, MAX_BATCH_BOND_SIZE + 1);
+    client.create_batch_bonds(&params_list);
 }
 
 #[test]
@@ -290,6 +359,24 @@ fn test_get_batch_total_amount() {
 }
 
 #[test]
+fn test_get_batch_total_amount_empty_batch_returns_zero() {
+    let env = Env::default();
+    let params_list = Vec::new(&env);
+
+    let total = crate::batch::get_batch_total_amount(&params_list);
+    assert_eq!(total, 0);
+}
+
+#[test]
+#[should_panic(expected = "batch too large")]
+fn test_get_batch_total_amount_above_max_batch_size_fails() {
+    let env = Env::default();
+    let params_list = build_valid_batch(&env, MAX_BATCH_BOND_SIZE + 1);
+
+    let _ = crate::batch::get_batch_total_amount(&params_list);
+}
+
+#[test]
 #[should_panic(expected = "batch total overflow")]
 fn test_batch_total_overflow() {
     let env = Env::default();
@@ -330,7 +417,7 @@ fn test_duplicate_bond_in_batch_fails() {
     let (client, _admin, identity, _token, _contract_id) = setup_with_token(&env);
 
     // Create first bond
-    client.create_bond_with_rolling(&identity, &1000, &86400, &false, &0);
+    client.create_bond_with_rolling(&identity, &1_000_000, &86400, &false, &0);
 
     // Try to create another bond (will fail because bond already exists)
     let mut params_list = Vec::new(&env);
@@ -445,4 +532,17 @@ fn test_batch_bonds_with_different_durations() {
     assert_eq!(result.created_count, 1);
     let bond = result.bonds.get(0).unwrap();
     assert_eq!(bond.bond_duration, 86400);
+}
+
+#[test]
+fn test_max_batch_size_gas_profile() {
+    let (single_cpu, single_mem) = batch_create_cost(1);
+    let (max_cpu, max_mem) = batch_create_cost(MAX_BATCH_BOND_SIZE);
+
+    std::println!(
+        "[GAS] create_batch_bonds single cpu={single_cpu} mem={single_mem} | max cpu={max_cpu} mem={max_mem}"
+    );
+
+    assert!(max_cpu >= single_cpu);
+    assert!(max_mem >= single_mem);
 }

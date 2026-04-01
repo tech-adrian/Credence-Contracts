@@ -2,9 +2,11 @@
 //! Covers: initialization, fees, depositors, multi-sig (signers, threshold,
 //! propose/approve/execute), fund source tracking, events, and security.
 
-use crate::{CredenceTreasury, CredenceTreasuryClient, FundSource};
+use crate::{CredenceTreasury, CredenceTreasuryClient, CumulativeAmount, FundSource};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env};
+
+const CUMULATIVE_SEGMENT: u128 = (i128::MAX as u128) + 1;
 
 fn setup(e: &Env) -> (CredenceTreasuryClient<'_>, Address) {
     let contract_id = e.register(CredenceTreasury, ());
@@ -23,7 +25,34 @@ fn test_initialize() {
     assert_eq!(client.get_balance(), 0);
     assert_eq!(client.get_balance_by_source(&FundSource::ProtocolFee), 0);
     assert_eq!(client.get_balance_by_source(&FundSource::SlashedFunds), 0);
+    assert_eq!(
+        client.get_cumulative_received(),
+        CumulativeAmount {
+            rollovers: 0,
+            remainder: 0,
+        }
+    );
     assert_eq!(client.get_threshold(), 0);
+}
+
+fn counter_to_u128(counter: &CumulativeAmount) -> u128 {
+    (u128::from(counter.rollovers) * CUMULATIVE_SEGMENT)
+        + u128::try_from(counter.remainder).expect("remainder should be non-negative")
+}
+
+fn withdraw_all(
+    e: &Env,
+    client: &CredenceTreasuryClient<'_>,
+    amount: i128,
+) -> (Address, Address, u64) {
+    let signer = Address::generate(e);
+    let recipient = Address::generate(e);
+    client.add_signer(&signer);
+    client.set_threshold(&1);
+    let proposal_id = client.propose_withdrawal(&signer, &recipient, &amount);
+    client.approve_withdrawal(&signer, &proposal_id);
+    client.execute_withdrawal(&proposal_id, &0);
+    (signer, recipient, proposal_id)
 }
 
 #[test]
@@ -139,6 +168,29 @@ fn test_propose_approve_execute_withdrawal() {
     assert_eq!(client.get_balance(), 7000);
     let prop2 = client.get_proposal(&id);
     assert!(prop2.executed);
+}
+
+#[test]
+fn test_withdrawal_reduces_available_source_balances_proportionally() {
+    let e = Env::default();
+    let (client, admin) = setup(&e);
+    client.receive_fee(&admin, &100, &FundSource::ProtocolFee);
+    client.receive_fee(&admin, &200, &FundSource::SlashedFunds);
+
+    let signer = Address::generate(&e);
+    let recipient = Address::generate(&e);
+    client.add_signer(&signer);
+    client.set_threshold(&1);
+    let id = client.propose_withdrawal(&signer, &recipient, &150);
+    client.approve_withdrawal(&signer, &id);
+    client.execute_withdrawal(&id, &0);
+
+    assert_eq!(client.get_balance(), 150);
+    assert_eq!(client.get_balance_by_source(&FundSource::ProtocolFee), 50);
+    assert_eq!(client.get_balance_by_source(&FundSource::SlashedFunds), 100);
+
+    let cumulative_total = client.get_cumulative_received();
+    assert_eq!(counter_to_u128(&cumulative_total), 300);
 }
 
 #[test]
@@ -278,6 +330,14 @@ fn test_fund_source_tracking() {
     assert_eq!(client.get_balance(), 350);
     assert_eq!(client.get_balance_by_source(&FundSource::ProtocolFee), 150);
     assert_eq!(client.get_balance_by_source(&FundSource::SlashedFunds), 200);
+    assert_eq!(
+        counter_to_u128(&client.get_cumulative_by_source(&FundSource::ProtocolFee)),
+        150
+    );
+    assert_eq!(
+        counter_to_u128(&client.get_cumulative_by_source(&FundSource::SlashedFunds)),
+        200
+    );
 }
 
 #[test]
@@ -405,4 +465,70 @@ fn test_execute_withdrawal_slippage_reverts_adversarial_large_min() {
     // Adversarial: caller sets an unreachably high min_amount_out.
     let (_e, client, id) = setup_ready_proposal(100);
     client.execute_withdrawal(&id, &i128::MAX);
+}
+
+#[test]
+fn test_cumulative_protocol_fee_rollover_survives_large_claim_cycle() {
+    let e = Env::default();
+    let (client, admin) = setup(&e);
+
+    client.receive_fee(&admin, &i128::MAX, &FundSource::ProtocolFee);
+    assert_eq!(client.get_balance(), i128::MAX);
+    assert_eq!(
+        client.get_balance_by_source(&FundSource::ProtocolFee),
+        i128::MAX
+    );
+    assert_eq!(
+        client.get_cumulative_by_source(&FundSource::ProtocolFee),
+        CumulativeAmount {
+            rollovers: 0,
+            remainder: i128::MAX,
+        }
+    );
+
+    let _ = withdraw_all(&e, &client, i128::MAX);
+    assert_eq!(client.get_balance(), 0);
+    assert_eq!(client.get_balance_by_source(&FundSource::ProtocolFee), 0);
+
+    client.receive_fee(&admin, &10, &FundSource::ProtocolFee);
+
+    assert_eq!(client.get_balance(), 10);
+    assert_eq!(client.get_balance_by_source(&FundSource::ProtocolFee), 10);
+    assert_eq!(
+        client.get_cumulative_by_source(&FundSource::ProtocolFee),
+        CumulativeAmount {
+            rollovers: 1,
+            remainder: 9,
+        }
+    );
+    assert_eq!(
+        client.get_cumulative_received(),
+        CumulativeAmount {
+            rollovers: 1,
+            remainder: 9,
+        }
+    );
+}
+
+#[test]
+fn test_cumulative_fees_reconcile_after_repeated_high_rate_claims() {
+    let e = Env::default();
+    let (client, admin) = setup(&e);
+    let burst = i128::MAX / 2;
+    let mut expected_cumulative = 0_u128;
+
+    for _ in 0..3 {
+        client.receive_fee(&admin, &burst, &FundSource::ProtocolFee);
+        expected_cumulative += u128::try_from(burst).expect("burst should fit");
+        let _ = withdraw_all(&e, &client, burst);
+        assert_eq!(client.get_balance(), 0);
+        assert_eq!(client.get_balance_by_source(&FundSource::ProtocolFee), 0);
+    }
+
+    let cumulative_protocol = client.get_cumulative_by_source(&FundSource::ProtocolFee);
+    let cumulative_total = client.get_cumulative_received();
+
+    assert_eq!(counter_to_u128(&cumulative_protocol), expected_cumulative);
+    assert_eq!(counter_to_u128(&cumulative_total), expected_cumulative);
+    assert!(cumulative_protocol.rollovers >= 1);
 }

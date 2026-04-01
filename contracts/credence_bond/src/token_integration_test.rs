@@ -159,7 +159,7 @@ fn test_top_up_requires_remaining_allowance() {
 
     client.set_token(&admin, &token_id);
     client.create_bond_with_rolling(&identity, &1000_i128, &86400_u64, &false, &0_u64);
-    client.top_up(&1_i128);
+    client.top_up(&1_000_i128);
 }
 
 #[test]
@@ -185,7 +185,7 @@ fn test_withdraw_transfers_tokens_back_to_identity() {
 }
 
 #[test]
-#[should_panic(expected = "amount must be positive")]
+#[should_panic(expected = "top-up amount below minimum required")]
 fn test_top_up_negative_amount_panics() {
     let e = Env::default();
     let (client, _admin, identity, _token_id, _bond_id) = test_helpers::setup_with_token(&e);

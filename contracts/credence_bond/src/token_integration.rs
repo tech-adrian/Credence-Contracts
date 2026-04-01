@@ -1,9 +1,10 @@
 //! USDC token integration helpers for Credence Bond.
 //! Centralizes token configuration, allowance checks, and transfer operations.
-//! Now uses safe token operations for consistent error handling.
+//! Rejects fee-on-transfer tokens where balance verification fails.
 
 use crate::DataKey;
-use crate::safe_token;
+use crate::validation::validate_recipient;
+use soroban_sdk::token::TokenClient;
 use soroban_sdk::{Address, Env, String, Symbol};
 
 /// Stellar network passphrase label used for USDC mainnet references.
@@ -69,13 +70,72 @@ pub fn require_allowance(e: &Env, owner: &Address, amount: i128) {
 }
 
 /// @notice Transfers tokens from owner into the bond contract.
-/// @dev Uses safe transfer with proper validation and error handling.
+/// @dev Requires prior approval for the bond contract as spender.
+/// Detects and rejects fee-on-transfer tokens by verifying balance changes.
+/// @param e Environment reference
+/// @param owner Token owner address (must have approved the contract)
+/// @param amount Amount to transfer (must match actual amount received)
+/// @throws panic with UnsupportedToken error (code 213) if transfer amount differs
 pub fn transfer_into_contract(e: &Env, owner: &Address, amount: i128) {
-    safe_token::safe_transfer_from(e, owner, amount);
+    if amount < 0 {
+        panic!("amount must be non-negative");
+    }
+    if amount == 0 {
+        return;
+    }
+
+    require_allowance(e, owner, amount);
+    let contract = e.current_contract_address();
+    let token = token_client(e);
+
+    // Check contract balance before transfer
+    let balance_before = token.balance(&contract);
+
+    // Perform transfer
+    token.transfer_from(&contract, owner, &contract, &amount);
+
+    // Verify balance increased by exactly the expected amount
+    // Rejects fee-on-transfer tokens where received < requested
+    let balance_after = token.balance(&contract);
+    let actual_received = balance_after.checked_sub(balance_before)
+        .expect("balance underflow");
+
+    if actual_received != amount {
+        panic!("unsupported token: transfer amount mismatch (code 213)");
+    }
 }
 
 /// @notice Transfers tokens from the bond contract to recipient.
-/// @dev Uses safe transfer for standard withdrawals and penalty/treasury transfers.
+/// @dev Used for standard withdrawals and penalty/treasury transfers.
+/// Detects and rejects fee-on-transfer tokens by verifying balance changes.
+/// @param e Environment reference
+/// @param recipient Recipient address
+/// @param amount Amount to transfer (must match actual amount sent)
+/// @throws panic with UnsupportedToken error (code 213) if transfer amount differs
 pub fn transfer_from_contract(e: &Env, recipient: &Address, amount: i128) {
-    safe_token::safe_transfer(e, recipient, amount);
+    if amount < 0 {
+        panic!("amount must be non-negative");
+    }
+    if amount == 0 {
+        return;
+    }
+
+    let contract = e.current_contract_address();
+    let token = token_client(e);
+
+    // Check contract balance before transfer
+    let balance_before = token.balance(&contract);
+
+    // Perform transfer
+    token.transfer(&contract, recipient, &amount);
+
+    // Verify balance decreased by exactly the expected amount
+    // Rejects fee-on-transfer tokens where sent != requested
+    let balance_after = token.balance(&contract);
+    let actual_sent = balance_before.checked_sub(balance_after)
+        .expect("balance underflow");
+
+    if actual_sent != amount {
+        panic!("unsupported token: transfer amount mismatch (code 213)");
+    }
 }

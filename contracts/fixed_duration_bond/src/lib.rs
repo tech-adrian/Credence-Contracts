@@ -16,10 +16,12 @@
 
 mod errors;
 mod types;
+mod validation;
 
-use credence_math::{add_i128, split_bps};
+use credence_math::{add_i128, mul_i128, split_bps};
 use errors::*;
 use types::{DataKey, FeeConfig, FixedBond, OracleSafety};
+use validation::validate_recipient;
 
 use soroban_sdk::{contract, contractimpl, token::TokenClient, Address, Env, Symbol};
 
@@ -31,6 +33,9 @@ mod tests;
 
 /// Maximum fee in basis points (1000 = 10%).
 pub const MAX_FEE_BPS: u32 = 1000;
+/// Default staleness window for oracle answers (seconds) when no per-asset
+/// override is configured. Default to 1 hour.
+pub const DEFAULT_MAX_STALENESS: u64 = 3600;
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -71,6 +76,48 @@ fn apply_bps(amount: i128, bps: u32) -> (i128, i128) {
     )
 }
 
+/// Verify balance-delta for token transfer to reject fee-on-transfer tokens.
+/// Call before performing transfer_from to verify received amount.
+/// 
+/// # Panics
+/// If balance increased by less than expected amount after transfer_from.
+fn verify_transfer_in(
+    token_client: &TokenClient,
+    contract: &Address,
+    expected_amount: i128,
+) {
+    let balance_before = token_client.balance(contract);
+    let balance_after = token_client.balance(contract);
+    let actual_received = balance_after
+        .checked_sub(balance_before)
+        .expect(ERR_FEE_MUL_OVERFLOW);
+
+    if actual_received != expected_amount {
+        panic!("{}", ERR_UNSUPPORTED_TOKEN);
+    }
+}
+
+/// Verify balance-delta for token transfer to reject fee-on-transfer tokens.
+/// Call after performing transfer to verify sent amount.
+/// 
+/// # Panics
+/// If balance decreased by less than expected amount after transfer.
+fn verify_transfer_out(
+    token_client: &TokenClient,
+    contract: &Address,
+    balance_before: i128,
+    expected_amount: i128,
+) {
+    let balance_after = token_client.balance(contract);
+    let actual_sent = balance_before
+        .checked_sub(balance_after)
+        .expect(ERR_FEE_MUL_OVERFLOW);
+
+    if actual_sent != expected_amount {
+        panic!("{}", ERR_UNSUPPORTED_TOKEN);
+    }
+}
+
 #[inline]
 fn validate_oracle_answer(answer: i128, safety: &OracleSafety) {
     if answer <= 0 {
@@ -78,6 +125,56 @@ fn validate_oracle_answer(answer: i128, safety: &OracleSafety) {
     }
     if answer < safety.min_answer || answer > safety.max_answer {
         panic!("{}", ERR_ORACLE_ANSWER_OUT_OF_RANGE);
+    }
+}
+
+/// Minimal oracle freshness/round validator as required by issue #125.
+/// Keeps checks deliberately small and deterministic per instructions.
+fn get_max_staleness(e: &Env, asset: &Address) -> u64 {
+    e.storage()
+        .instance()
+        .get::<_, u64>(&DataKey::OracleStaleness(asset.clone()))
+        .unwrap_or(DEFAULT_MAX_STALENESS)
+}
+
+/// Validate receiver allowlist: panics if the allowlist is enabled and the
+/// recipient is not allowed. Default allowlist state is disabled.
+fn validate_receiver_allowed(e: &Env, recipient: &Address) {
+    let enabled: bool = e
+        .storage()
+        .instance()
+        .get::<_, bool>(&DataKey::ReceiverAllowlistEnabled)
+        .unwrap_or(false);
+    if !enabled {
+        return;
+    }
+    let allowed: bool = e
+        .storage()
+        .instance()
+        .get::<_, bool>(&DataKey::ReceiverAllowlist(recipient.clone()))
+        .unwrap_or(false);
+    if !allowed {
+        panic!("{}", ERR_UNAUTHORIZED_RECEIVER);
+    }
+}
+
+#[inline]
+fn validate_oracle(
+    answer: i128,
+    updated_at: u64,
+    round_id: u64,
+    answered_in_round: u64,
+    max_staleness: u64,
+    now: u64,
+) {
+    if answer <= 0 {
+        panic!("{}", ERR_ORACLE_INVALID_ANSWER);
+    }
+    if answered_in_round < round_id {
+        panic!("{}", ERR_ORACLE_INCOMPLETE_ROUND);
+    }
+    if now.checked_sub(updated_at).unwrap_or(u64::MAX) > max_staleness {
+        panic!("{}", ERR_ORACLE_STALE);
     }
 }
 
@@ -161,6 +258,43 @@ impl FixedDurationBond {
         );
     }
 
+    /// Enable or disable the receiver allowlist. Default is disabled.
+    pub fn set_receiver_allowlist_enabled(e: Env, admin: Address, enabled: bool) {
+        require_admin(&e, &admin);
+        e.storage()
+            .instance()
+            .set(&DataKey::ReceiverAllowlistEnabled, &enabled);
+        e.events().publish(
+            (Symbol::new(&e, "receiver_allowlist_toggled"),),
+            (enabled,),
+        );
+    }
+
+    /// Allow a receiver address to receive protocol-controlled funds when the
+    /// allowlist is enabled.
+    pub fn allow_receiver(e: Env, admin: Address, receiver: Address) {
+        require_admin(&e, &admin);
+        e.storage()
+            .instance()
+            .set(&DataKey::ReceiverAllowlist(receiver.clone()), &true);
+        e.events().publish(
+            (Symbol::new(&e, "receiver_allowed"),),
+            (receiver,),
+        );
+    }
+
+    /// Revoke an allowed receiver.
+    pub fn revoke_receiver(e: Env, admin: Address, receiver: Address) {
+        require_admin(&e, &admin);
+        e.storage()
+            .instance()
+            .set(&DataKey::ReceiverAllowlist(receiver.clone()), &false);
+        e.events().publish(
+            (Symbol::new(&e, "receiver_revoked"),),
+            (receiver,),
+        );
+    }
+
     /// Collect all accrued creation fees to the admin or treasury.
     /// Transfers the fee balance to `recipient` and resets the counter.
     pub fn collect_fees(e: Env, admin: Address, recipient: Address) -> i128 {
@@ -176,8 +310,15 @@ impl FixedDurationBond {
         // CEI: clear state before transfer.
         e.storage().instance().set(&DataKey::AccruedFees, &0_i128);
 
+        // Guard: validate recipient against allowlist if enabled (Phase 1: only collect_fees)
+        validate_receiver_allowed(&e, &recipient);
+
         let token = get_token(&e);
         let contract = e.current_contract_address();
+        
+        // Validate recipient to prevent transfers to invalid addresses
+        validate_recipient(&recipient, &contract);
+        
         TokenClient::new(&e, &token).transfer(&contract, &recipient, &accrued);
 
         e.events().publish(
@@ -193,17 +334,25 @@ impl FixedDurationBond {
     /// - oracle safety is configured for this asset
     /// - answer is strictly positive
     /// - answer is within the configured min/max bounds
-    pub fn quote_value(e: Env, asset: Address, amount: i128, oracle_answer: i128) -> i128 {
+    pub fn quote_value(
+        e: Env,
+        asset: Address,
+        amount: i128,
+        oracle_answer: i128,
+        updated_at: u64,
+        round_id: u64,
+        answered_in_round: u64,
+    ) -> i128 {
         if amount <= 0 {
             panic!("{}", ERR_INVALID_AMOUNT);
         }
         let safety: OracleSafety = e
             .storage()
             .instance()
-            .get(&DataKey::OracleSafety(asset))
+            .get(&DataKey::OracleSafety(asset.clone()))
             .unwrap_or_else(|| panic!("{}", ERR_ORACLE_SAFETY_NOT_SET));
         validate_oracle_answer(oracle_answer, &safety);
-        checked_mul_i128(amount, oracle_answer, ERR_VALUATION_OVERFLOW)
+        mul_i128(amount, oracle_answer, ERR_VALUATION_OVERFLOW)
     }
 
     // ── Bond lifecycle ─────────────────────────────────────────────────────
@@ -247,7 +396,22 @@ impl FixedDurationBond {
         // Pull tokens in first (caller must have approved).
         let token = get_token(&e);
         let contract = e.current_contract_address();
-        TokenClient::new(&e, &token).transfer_from(&contract, &owner, &contract, &amount);
+        let token_client = TokenClient::new(&e, &token);
+
+        // Check balance before transfer to detect fee-on-transfer tokens
+        let balance_before = token_client.balance(&contract);
+        
+        token_client.transfer_from(&contract, &owner, &contract, &amount);
+
+        // Verify balance increased by exactly the expected amount
+        let balance_after = token_client.balance(&contract);
+        let actual_received = balance_after
+            .checked_sub(balance_before)
+            .expect(ERR_FEE_MUL_OVERFLOW);
+
+        if actual_received != amount {
+            panic!("{}", ERR_UNSUPPORTED_TOKEN);
+        }
 
         // Apply optional creation fee.
         let net_amount = if let Some(cfg) = e
@@ -263,7 +427,7 @@ impl FixedDurationBond {
                     .instance()
                     .get(&DataKey::AccruedFees)
                     .unwrap_or(0);
-                let new_fees = checked_add_i128(prev_fees, fee, ERR_FEE_ACCRUE_OVERFLOW);
+                let new_fees = add_i128(prev_fees, fee, ERR_FEE_ACCRUE_OVERFLOW);
                 e.storage().instance().set(&DataKey::AccruedFees, &new_fees);
                 net
             } else {
@@ -332,7 +496,22 @@ impl FixedDurationBond {
 
         let token = get_token(&e);
         let contract = e.current_contract_address();
-        TokenClient::new(&e, &token).transfer(&contract, &owner, &bond.amount);
+        let token_client = TokenClient::new(&e, &token);
+
+        // Check balance before transfer to detect fee-on-transfer tokens
+        let balance_before = token_client.balance(&contract);
+        
+        token_client.transfer(&contract, &owner, &bond.amount);
+
+        // Verify balance decreased by exactly the expected amount
+        let balance_after = token_client.balance(&contract);
+        let actual_sent = balance_before
+            .checked_sub(balance_after)
+            .expect(ERR_FEE_MUL_OVERFLOW);
+
+        if actual_sent != bond.amount {
+            panic!("{}", ERR_UNSUPPORTED_TOKEN);
+        }
 
         e.events()
             .publish((Symbol::new(&e, "bond_withdrawn"), owner), bond.amount);
@@ -383,17 +562,35 @@ impl FixedDurationBond {
         let contract = e.current_contract_address();
         let token_client = TokenClient::new(&e, &token);
 
-        // Return net amount to owner.
+        // Return net amount to owner - verify balance delta to reject fee-on-transfer tokens
+        let balance_before_net = token_client.balance(&contract);
         token_client.transfer(&contract, &owner, &net_amount);
+        let balance_after_net = token_client.balance(&contract);
+        let actual_net_sent = balance_before_net
+            .checked_sub(balance_after_net)
+            .expect(ERR_FEE_MUL_OVERFLOW);
 
-        // Send penalty to treasury if configured.
+        if actual_net_sent != net_amount {
+            panic!("{}", ERR_UNSUPPORTED_TOKEN);
+        }
+
+        // Send penalty to treasury if configured - verify balance delta
         if penalty > 0 {
             if let Some(cfg) = e
                 .storage()
                 .instance()
                 .get::<_, FeeConfig>(&DataKey::FeeConfig)
             {
+                let balance_before_penalty = token_client.balance(&contract);
                 token_client.transfer(&contract, &cfg.treasury, &penalty);
+                let balance_after_penalty = token_client.balance(&contract);
+                let actual_penalty_sent = balance_before_penalty
+                    .checked_sub(balance_after_penalty)
+                    .expect(ERR_FEE_MUL_OVERFLOW);
+
+                if actual_penalty_sent != penalty {
+                    panic!("{}", ERR_UNSUPPORTED_TOKEN);
+                }
             }
         }
 

@@ -23,3 +23,4 @@ pub const ERR_ORACLE_SAFETY_NOT_SET: &str = "oracle safety not configured for as
 pub const ERR_ORACLE_ANSWER_NON_POSITIVE: &str = "oracle answer must be positive";
 pub const ERR_ORACLE_ANSWER_OUT_OF_RANGE: &str = "oracle answer out of configured range";
 pub const ERR_VALUATION_OVERFLOW: &str = "valuation overflow";
+pub const ERR_UNSUPPORTED_TOKEN: &str = "unsupported token: transfer amount mismatch (code 213)";

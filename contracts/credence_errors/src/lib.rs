@@ -165,6 +165,11 @@ pub enum ContractError {
     /// Contracts: bond
     LeverageExceeded = 212,
 
+    /// Token transfer resulted in different amount than requested (fee-on-transfer tokens).
+    /// Replaces: panic!("unsupported token: transfer amount mismatch")
+    /// Contracts: bond, dispute_resolution, fixed_duration_bond
+    UnsupportedToken = 213,
+
     // --- Attestation (300-399) ---
     /// An attestation already exists from this attester for this bond.
     /// Replaces: panic!("duplicate attestation")
@@ -221,6 +226,11 @@ pub enum ContractError {
     /// Replaces: panic!("already active")
     /// Contracts: registry
     AlreadyActive = 405,
+
+    /// Provided contract address is not a deployed contract.
+    /// Replaces: panic!("invalid contract address")
+    /// Contracts: registry
+    InvalidContractAddress = 406,
 
     // --- Delegation (500-599) ---
     /// Delegation expiry timestamp must be in the future.
@@ -319,7 +329,8 @@ impl ErrorExt for ContractError {
             | ContractError::NegativeStake
             | ContractError::EarlyExitConfigNotSet
             | ContractError::InvalidPenaltyBps
-            | ContractError::LeverageExceeded => ErrorCategory::Bond,
+            | ContractError::LeverageExceeded
+            | ContractError::UnsupportedToken => ErrorCategory::Bond,
 
             ContractError::DuplicateAttestation
             | ContractError::AttestationNotFound
@@ -332,7 +343,8 @@ impl ErrorExt for ContractError {
             | ContractError::IdentityNotRegistered
             | ContractError::BondContractNotRegistered
             | ContractError::AlreadyDeactivated
-            | ContractError::AlreadyActive => ErrorCategory::Registry,
+            | ContractError::AlreadyActive
+            | ContractError::InvalidContractAddress => ErrorCategory::Registry,
 
             ContractError::ExpiryInPast
             | ContractError::DelegationNotFound
@@ -380,6 +392,7 @@ impl ErrorExt for ContractError {
             }
             ContractError::InvalidPenaltyBps => "Penalty bps must be in range 0-10000",
             ContractError::LeverageExceeded => "Resulting leverage exceeds the configured maximum",
+            ContractError::UnsupportedToken => "Token transfer resulted in different amount than requested (fee-on-transfer tokens not supported)",
             ContractError::DuplicateAttestation => "Attestation already exists from this attester",
             ContractError::AttestationNotFound => "No attestation found for the given key",
             ContractError::AttestationAlreadyRevoked => "Attestation has already been revoked",
@@ -399,6 +412,7 @@ impl ErrorExt for ContractError {
             }
             ContractError::AlreadyDeactivated => "Record is already in the deactivated state",
             ContractError::AlreadyActive => "Record is already in the active state",
+            ContractError::InvalidContractAddress => "Provided contract address is not a deployed contract",
             ContractError::ExpiryInPast => "Delegation expiry must be in the future",
             ContractError::DelegationNotFound => "No delegation found for the given key",
             ContractError::AlreadyRevoked => "Delegation has already been revoked",
