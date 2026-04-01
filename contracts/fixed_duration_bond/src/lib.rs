@@ -16,10 +16,12 @@
 
 mod errors;
 mod types;
+mod validation;
 
 use credence_math::{add_i128, mul_i128, split_bps};
 use errors::*;
 use types::{DataKey, FeeConfig, FixedBond, OracleSafety};
+use validation::validate_recipient;
 
 use soroban_sdk::{contract, contractimpl, token::TokenClient, Address, Env, Symbol};
 
@@ -313,6 +315,10 @@ impl FixedDurationBond {
 
         let token = get_token(&e);
         let contract = e.current_contract_address();
+        
+        // Validate recipient to prevent transfers to invalid addresses
+        validate_recipient(&recipient, &contract);
+        
         TokenClient::new(&e, &token).transfer(&contract, &recipient, &accrued);
 
         e.events().publish(

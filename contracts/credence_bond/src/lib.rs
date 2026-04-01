@@ -1,6 +1,5 @@
 #![no_std]
 
-use soroban_sdk::token::TokenClient;
 use soroban_sdk::{
     contract, contractimpl, contracttype, Address, Env, IntoVal, String, Symbol, Val, Vec,
 };
@@ -32,6 +31,7 @@ pub mod types;
 mod validation;
 pub mod verifier;
 mod weighted_attestation;
+mod cooldown;
 
 use crate::access_control::{
     add_verifier_role, is_verifier, remove_verifier_role, require_verifier,

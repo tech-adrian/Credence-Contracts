@@ -3,6 +3,7 @@
 //! Rejects fee-on-transfer tokens where balance verification fails.
 
 use crate::DataKey;
+use crate::validation::validate_recipient;
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{Address, Env, String, Symbol};
 
