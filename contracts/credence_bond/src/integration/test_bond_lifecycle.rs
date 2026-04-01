@@ -65,6 +65,7 @@ fn test_lifecycle_slash_then_withdraw_remaining() {
     let (client, admin, identity) = setup(&e);
     let duration = 86400_u64;
     client.create_bond_with_rolling(&identity, &1000_i128, &duration, &false, &0_u64);
+    test_helpers::advance_ledger_sequence(&e);
     let after_slash = client.slash(&admin, &400_i128);
     assert_eq!(after_slash.slashed_amount, 400);
     assert_eq!(after_slash.bonded_amount, 1000);
@@ -109,6 +110,7 @@ fn test_lifecycle_state_consistency() {
     assert_eq!(s1.bonded_amount, s2.bonded_amount);
     assert_eq!(s1.slashed_amount, s2.slashed_amount);
 
+    test_helpers::advance_ledger_sequence(&e);
     client.slash(&admin, &500_i128);
     let s3 = client.get_identity_state();
     assert_eq!(s3.slashed_amount, 500);

@@ -341,7 +341,6 @@ mod ownership_transfer_tests {
         let env = Env::default();
         let (contract_address, super_admin) = setup_contract(&env);
 
-        env.mock_all_auths();
         env.as_contract(&contract_address, || {
             // Try to accept when no transfer was initiated
             AdminContract::accept_ownership(env.clone(), super_admin.clone());

@@ -384,6 +384,8 @@ fn fuzz_bond_operations() {
                 }
             };
 
+            test_helpers::advance_ledger_sequence(&e);
+
             // Run a small sequence of operations after successful creation.
             for _ in 0..actions {
                 let op = rng.gen_range_u64(3);

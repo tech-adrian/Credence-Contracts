@@ -22,6 +22,7 @@ mod nonce;
 mod parameters;
 pub mod pausable;
 pub mod rolling_bond;
+mod same_ledger_liquidation_guard;
 #[allow(dead_code)]
 mod slash_history;
 #[allow(dead_code)]
@@ -554,6 +555,7 @@ impl CredenceBond {
         };
         let key = DataKey::Bond;
         e.storage().instance().set(&key, &bond);
+        same_ledger_liquidation_guard::record_collateral_increase(&e);
 
         let old_tier = BondTier::Bronze;
         let new_tier = tiered_bond::get_tier_for_amount(net_amount);
@@ -661,6 +663,7 @@ impl CredenceBond {
             attestation_data: attestation_data.clone(),
             timestamp: e.ledger().timestamp(),
             weight,
+            attestation_data: attestation_data.clone(),
             revoked: false,
         };
         e.storage()
@@ -1309,6 +1312,7 @@ pub fn extend_duration(e: Env, additional_duration: u64) -> IdentityBond {
             let new_tier = tiered_bond::get_tier_for_amount(new_amount);
             bond.bonded_amount = new_amount;
             e.storage().instance().set(&key, &bond);
+            same_ledger_liquidation_guard::record_collateral_increase(&e);
             tiered_bond::emit_tier_change_if_needed(&e, &bond.identity, old_tier, new_tier);
             e.events().publish(
                 (Symbol::new(&e, "bond_increased"), bond.identity.clone()),
@@ -1492,6 +1496,7 @@ pub fn extend_duration(e: Env, additional_duration: u64) -> IdentityBond {
             Self::release_lock(&e);
             panic!("not admin");
         }
+        same_ledger_liquidation_guard::require_slash_allowed_after_collateral_increase(&e);
         let bond_key = DataKey::Bond;
         let bond: IdentityBond = e
             .storage()
@@ -1861,6 +1866,8 @@ mod test_reentrancy_preservation;
 mod test_replay_prevention;
 #[cfg(test)]
 mod test_rolling_bond;
+#[cfg(test)]
+mod test_same_ledger_liquidation_guard;
 #[cfg(test)]
 mod test_slashing;
 #[cfg(test)]

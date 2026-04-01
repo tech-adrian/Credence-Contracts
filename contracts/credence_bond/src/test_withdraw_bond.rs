@@ -116,6 +116,7 @@ fn test_withdraw_bond_after_slash() {
     let (client, admin, identity, _token_id, _bond_id) = setup_with_token(&e);
 
     client.create_bond_with_rolling(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    test_helpers::advance_ledger_sequence(&e);
     client.slash(&admin, &400);
     e.ledger().with_mut(|li| li.timestamp = 87401);
 

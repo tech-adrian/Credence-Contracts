@@ -173,6 +173,8 @@ pub fn create_batch_bonds(e: &Env, params_list: Vec<BatchBondParams>) -> BatchBo
         bonds.push_back(bond);
     }
 
+    crate::same_ledger_liquidation_guard::record_collateral_increase(e);
+
     let result = BatchBondResult {
         created_count: bonds.len(),
         bonds: bonds.clone(),

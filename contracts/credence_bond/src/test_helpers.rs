@@ -2,9 +2,18 @@
 //! Provides token setup for tests that need create_bond, top_up, withdraw, etc.
 
 use crate::{CredenceBond, CredenceBondClient};
-use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
 use soroban_sdk::{Address, Env};
+
+/// Advance ledger sequence (test utility). Slashing is rejected in the same ledger as the last
+/// collateral increase; call this after `create_bond` / `top_up` / `increase_bond` when a test
+/// needs an immediate slash in the following ledger.
+pub fn advance_ledger_sequence(e: &Env) {
+    let mut info = e.ledger().get();
+    info.sequence_number = info.sequence_number.saturating_add(1);
+    e.ledger().set(info);
+}
 
 /// Default mint amount for tests (covers tier thresholds and most scenarios).
 const DEFAULT_MINT: i128 = 100_000_000_000_000_000;

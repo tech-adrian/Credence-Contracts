@@ -100,6 +100,8 @@ pub fn slash_bond(e: &Env, admin: &Address, amount: i128) -> crate::IdentityBond
     // 1. Authorization check
     validate_admin(e, admin);
 
+    crate::same_ledger_liquidation_guard::require_slash_allowed_after_collateral_increase(e);
+
     // 2. Retrieve current bond state
     let key = crate::DataKey::Bond;
     let mut bond = e

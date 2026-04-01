@@ -148,6 +148,7 @@ fn test_request_cooldown_exceeds_available_after_slash() {
     e.mock_all_auths();
     let (client, admin, identity) = setup_with_token(&e);
     client.create_bond_with_rolling(&identity, &1000, &86400, &false, &0);
+    test_helpers::advance_ledger_sequence(&e);
     client.slash(&admin, &300);
     client.set_cooldown_period(&admin, &100);
 
@@ -303,6 +304,7 @@ fn test_execute_cooldown_balance_slashed_during_cooldown() {
     client.request_cooldown_withdrawal(&identity, &800);
 
     // Slash the bond while cooldown is pending
+    test_helpers::advance_ledger_sequence(&e);
     client.slash(&admin, &500);
 
     // Now available = 1000 - 500 = 500, but request is for 800

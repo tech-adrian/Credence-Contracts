@@ -138,6 +138,7 @@ fn test_emergency_withdraw_respects_slashed_available_balance() {
 
     client.set_emergency_config(&admin, &governance, &treasury, &500, &true);
     client.create_bond_with_rolling(&identity, &1000_i128, &86_400_u64, &false, &0_u64);
+    test_helpers::advance_ledger_sequence(&e);
     client.slash(&admin, &900_i128);
 
     client.emergency_withdraw(&admin, &governance, &101_i128, &Symbol::new(&e, "crisis"));

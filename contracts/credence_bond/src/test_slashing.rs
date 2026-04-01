@@ -38,6 +38,7 @@ fn setup_with_bond(
 ) -> (CredenceBondClient<'_>, Address, Address) {
     let (client, admin, identity) = setup(e);
     client.create_bond_with_rolling(&identity, &amount, &duration, &false, &0_u64);
+    test_helpers::advance_ledger_sequence(e);
     (client, admin, identity)
 }
 
@@ -49,6 +50,7 @@ fn setup_with_bond_max_mint(
 ) -> (CredenceBondClient<'_>, Address, Address) {
     let (client, admin, identity, _token_id, _bond_id) = test_helpers::setup_with_max_mint(e);
     client.create_bond_with_rolling(&identity, &amount, &duration, &false, &0_u64);
+    test_helpers::advance_ledger_sequence(e);
     (client, admin, identity)
 }
 
@@ -341,6 +343,7 @@ fn test_withdraw_after_slash_respects_available() {
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
     client.create_bond_with_rolling(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    test_helpers::advance_ledger_sequence(&e);
     client.slash(&admin, &400_i128);
     e.ledger().with_mut(|li| li.timestamp = 86401);
     let bond = client.withdraw(&600_i128);
@@ -355,6 +358,7 @@ fn test_withdraw_more_than_available_after_slash() {
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
     client.create_bond_with_rolling(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    test_helpers::advance_ledger_sequence(&e);
     client.slash(&admin, &400_i128);
     e.ledger().with_mut(|li| li.timestamp = 86401);
     client.withdraw(&601_i128);
@@ -367,6 +371,7 @@ fn test_withdraw_when_fully_slashed() {
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
     client.create_bond_with_rolling(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    test_helpers::advance_ledger_sequence(&e);
 
     // Fully slash the bond
     client.slash(&admin, &1000_i128);
@@ -382,6 +387,7 @@ fn test_withdraw_exact_available_balance() {
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
     client.create_bond_with_rolling(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    test_helpers::advance_ledger_sequence(&e);
     client.slash(&admin, &400_i128);
     e.ledger().with_mut(|li| li.timestamp = 86401);
     let bond = client.withdraw(&600_i128);
@@ -395,6 +401,7 @@ fn test_slash_then_withdraw_then_slash_again() {
     e.ledger().with_mut(|li| li.timestamp = 0);
     let (client, admin, identity) = setup(&e);
     client.create_bond_with_rolling(&identity, &1000_i128, &86400_u64, &false, &0_u64);
+    test_helpers::advance_ledger_sequence(&e);
 
     // Slash, withdraw, slash again
     client.slash(&admin, &200_i128);
@@ -421,7 +428,8 @@ fn test_slash_after_partial_withdrawal() {
     client.withdraw(&300_i128);
     assert_eq!(client.get_identity_state().bonded_amount, 700);
 
-    // Then slash
+    // Then slash (ledger advanced vs bond creation; withdraw does not refresh collateral ledger)
+    test_helpers::advance_ledger_sequence(&e);
     let bond = client.slash(&admin, &200_i128);
     assert_eq!(bond.bonded_amount, 700);
     assert_eq!(bond.slashed_amount, 200);

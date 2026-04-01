@@ -20,6 +20,7 @@ fn setup_with_bond_and_governance<'a>(
 ) -> (CredenceBondClient<'a>, Address, Address) {
     let (client, admin, identity) = setup(e);
     client.create_bond_with_rolling(&identity, &1000000_i128, &86400_u64, &false, &0_u64);
+    test_helpers::advance_ledger_sequence(e);
     let mut gov_vec = Vec::new(e);
     for g in governors {
         gov_vec.push_back(g.clone());
