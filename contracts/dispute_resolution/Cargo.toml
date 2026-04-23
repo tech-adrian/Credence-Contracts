@@ -8,7 +8,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 soroban-sdk = { version = "23.0", features = [] }
-credence-errors = { path = "../credence_errors" }
+credence_errors = { path = "../credence_errors" }
 
 [dev-dependencies]
 soroban-sdk = { version = "23.0", features = ["testutils"] }
