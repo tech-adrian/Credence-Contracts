@@ -111,6 +111,26 @@ fn test_queue_change_eta_too_early_fails() {
 }
 
 #[test]
+#[should_panic(expected = "timelock delay has not elapsed")]
+fn test_execute_change_at_eta_minus_one_boundary_fails() {
+    let e = Env::default();
+    let (client, admin, _gov) = setup_with_delay(&e, 10);
+
+    e.ledger().with_mut(|li| {
+        li.timestamp = 1000;
+    });
+
+    let key = Symbol::new(&e, "fee_bps");
+    let id = client.queue_change(&admin, &key, &250, &1010);
+
+    e.ledger().with_mut(|li| {
+        li.timestamp = 1009;
+    });
+
+    client.execute_change(&id);
+}
+
+#[test]
 #[should_panic(expected = "only admin can propose changes")]
 fn test_propose_non_admin_fails() {
     let e = Env::default();
@@ -185,6 +205,44 @@ fn test_execute_change_at_expiration_boundary() {
 
     client.execute_change(&id);
     assert!(client.get_change(&id).executed);
+}
+
+#[test]
+fn test_grace_window_is_inclusive_until_expires_at() {
+    let e = Env::default();
+    let (client, admin, _gov) = setup_with_delay(&e, 10);
+
+    e.ledger().with_mut(|li| {
+        li.timestamp = 1000;
+    });
+
+    let key_just_before_expiry = Symbol::new(&e, "fee_grace_1");
+    let eta = 1010;
+    let id_just_before_expiry = client.queue_change(&admin, &key_just_before_expiry, &250, &eta);
+    let change_just_before_expiry = client.get_change(&id_just_before_expiry);
+
+    e.ledger().with_mut(|li| {
+        li.timestamp = change_just_before_expiry.expires_at - 1;
+    });
+
+    client.execute_change(&id_just_before_expiry);
+    assert!(client.get_change(&id_just_before_expiry).executed);
+
+    let key_at_expiry = Symbol::new(&e, "fee_grace_2");
+    let second_proposal_time = 2000;
+    e.ledger().with_mut(|li| {
+        li.timestamp = second_proposal_time;
+    });
+    let id_at_expiry =
+        client.queue_change(&admin, &key_at_expiry, &300, &(second_proposal_time + 10));
+    let change_at_expiry = client.get_change(&id_at_expiry);
+
+    e.ledger().with_mut(|li| {
+        li.timestamp = change_at_expiry.expires_at;
+    });
+
+    client.execute_change(&id_at_expiry);
+    assert!(client.get_change(&id_at_expiry).executed);
 }
 
 #[test]

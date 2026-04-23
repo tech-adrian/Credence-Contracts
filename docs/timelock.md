@@ -28,6 +28,14 @@ Governance ──cancel_change────┘
 3. After the ETA, admin calls `execute_change(change_id)` to finalize.
 4. At any point before execution, governance can call `cancel_change(change_id)` to discard it.
 
+Execution time boundaries are deterministic and inclusive:
+
+- `now = eta - 1`: execution must fail.
+- `now = eta`: execution is allowed.
+- `now = expires_at`: execution is still allowed.
+- `now = expires_at + 1`: execution must fail.
+- Grace-window behavior is locked by tests for both `expires_at - 1` and `expires_at`.
+
 ## Function Reference
 
 ### `initialize(admin, governance, min_delay)`
@@ -107,5 +115,6 @@ The timelock itself stores the change records. The actual application of values 
 - The minimum delay must be greater than zero. A zero delay would defeat the purpose of the timelock.
 - Only one address can propose/execute (admin) and only one can cancel (governance). Separation of powers ensures that a compromised admin cannot both propose and suppress cancellation.
 - Changes cannot be executed before the ETA. The contract checks `now >= eta` at execution time.
+- Execution is valid through `expires_at` and invalid strictly after it (`now > expires_at`).
 - Cancelled and already-executed changes are permanently locked and cannot be re-used.
 - The contract uses `checked_add` for all arithmetic to prevent overflow.
