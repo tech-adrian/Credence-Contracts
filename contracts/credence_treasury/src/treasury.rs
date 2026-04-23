@@ -8,7 +8,6 @@ use ethnum::U256;
 use soroban_sdk::{contract, contractimpl, contracttype, panic_with_error, Address, Env, Symbol};
 
 use crate::pausable;
-use crate::receiver::{FlashLoanReceiverClient, FLASH_LOAN_SUCCESS};
 
 const CUMULATIVE_SEGMENT: u128 = (i128::MAX as u128) + 1;
 

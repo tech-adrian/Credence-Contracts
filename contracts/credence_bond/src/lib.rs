@@ -6,7 +6,7 @@ use soroban_sdk::{
 
 pub mod access_control;
 mod batch;
-mod cooldown;
+mod claims;
 mod cooldown;
 pub mod early_exit_penalty;
 mod emergency;
@@ -30,6 +30,7 @@ mod slash_history;
 mod slashing;
 pub mod tiered_bond;
 mod token_integration;
+mod safe_token;
 pub mod types;
 pub mod upgrade_auth;
 mod validation;
@@ -120,14 +121,10 @@ pub enum DataKey {
     PendingClaims(Address),
     ClaimableAmount(Address),
     ClaimCounter,
+    ClaimById(u64),
     BondToken,
     Token,
     GraceWindow, // FIX 1: added for configurable post-expiry grace window
-    // Claims module storage keys
-    PendingClaims(Address),
-    ClaimableAmount(Address),
-    ClaimCounter,
-    ClaimById(u64),
     // Upgrade authorization storage keys
     UpgradeAuth(Address),
     AuthorizedUpgraders,
@@ -679,7 +676,6 @@ impl CredenceBond {
             attestation_data: attestation_data.clone(),
             timestamp: e.ledger().timestamp(),
             weight,
-            attestation_data: attestation_data.clone(),
             revoked: false,
         };
         e.storage()
