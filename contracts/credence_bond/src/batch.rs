@@ -217,7 +217,12 @@ pub fn validate_batch(e: &Env, params_list: Vec<BatchBondParams>) -> bool {
 ///
 /// # Panics
 /// * If the total amount would overflow i128
+/// * If batch size exceeds MAX_BATCH_BOND_SIZE
 pub fn get_batch_total_amount(params_list: &Vec<BatchBondParams>) -> i128 {
+    if params_list.is_empty() {
+        return 0;
+    }
+    
     validate_batch_size(params_list);
 
     let mut total: i128 = 0;
