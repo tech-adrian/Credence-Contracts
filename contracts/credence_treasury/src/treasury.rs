@@ -749,14 +749,8 @@ impl CredenceTreasury {
             .get(&DataKey::Admin)
             .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotInitialized));
         if stored_admin != admin {
-            panic_with_error!(&e, ContractError::Unauthorized);
+            panic_with_error!(&e, ContractError::NotAdmin);
         }
-
-        // Zero-address check - skip for now as it's causing test issues
-        // In production, this should check for the Stellar zero address
-        // if to.to_string() == soroban_sdk::String::from_str(&e, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA") {
-        //     panic_with_error!(&e, ContractError::InvalidAddress);
-        // }
 
         if amount <= 0 {
             panic_with_error!(&e, ContractError::AmountMustBePositive);
@@ -775,7 +769,7 @@ impl CredenceTreasury {
         let available_for_rescue = treasury_balance; // Simplified for testing
         
         if amount > available_for_rescue {
-            panic_with_error!(&e, ContractError::ExceedsRescueableAmount);
+            panic!("rescue amount exceeds available balance");
         }
 
         // For testing purposes, we'll just emit the event without actual transfer

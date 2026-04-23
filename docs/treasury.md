@@ -37,14 +37,21 @@ Central contract for managing protocol fees and slashed funds with multi-signatu
   Adds the signer’s approval. Double approval by the same signer is a no-op.  
   Emits `treasury_withdrawal_approved`.
 
-- **execute_withdrawal(proposal_id)**  
+- **execute_withdrawal(proposal_id, min_amount_out)**  
   Callable by anyone once approval count ≥ threshold. Deducts from treasury and marks the proposal executed.  
-  Emits `treasury_withdrawal_executed`.
+  
+  **Withdrawal Guardrails:**
+  - **Liquidity Floor**: Ensures remaining balance after withdrawal is ≥ `min_liquidity`. Reverts with "liquidity guard: withdrawal would breach minimum liquidity floor" if violated.
+  - **Slippage Protection**: Requires proposal amount ≥ `min_amount_out`. Reverts with "slippage: received amount below minimum" if violated. Pass `0` to skip this check.
+  
+  Emits `treasury_withdrawal_executed` with `(recipient, min_amount_out, actual_amount)`.
 
 ## Queries
 
 - **get_balance()** — Total treasury balance.
 - **get_balance_by_source(source)** — Balance attributed to `ProtocolFee` or `SlashedFunds` (cumulative received from that source).
+- **get_min_liquidity()** — Current minimum liquidity floor that must remain after withdrawals.
+- **set_min_liquidity(admin, min_liquidity)** — Admin only. Sets the minimum balance that must remain in the treasury after any withdrawal.
 - **get_admin()** — Admin address.
 - **is_depositor(address)** — Whether the address can call `receive_fee`.
 - **is_signer(address)** — Whether the address can propose and approve withdrawals.
@@ -71,3 +78,5 @@ Central contract for managing protocol fees and slashed funds with multi-signatu
 - Threshold cannot exceed signer count; removing signers auto-caps threshold.
 - Amounts use checked arithmetic to avoid overflow/underflow.
 - Proposal execution is idempotent (executed flag prevents double spend).
+- **Liquidity Floor Guardrail**: `min_liquidity` setting ensures treasury maintains minimum solvency after withdrawals.
+- **Slippage Protection**: `min_amount_out` parameter protects withdrawal executors from unfavorable settlement conditions.
