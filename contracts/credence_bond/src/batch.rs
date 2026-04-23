@@ -222,7 +222,7 @@ pub fn get_batch_total_amount(params_list: &Vec<BatchBondParams>) -> i128 {
     if params_list.is_empty() {
         return 0;
     }
-    
+
     validate_batch_size(params_list);
 
     let mut total: i128 = 0;

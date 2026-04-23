@@ -546,7 +546,6 @@ fn test_max_batch_size_gas_profile() {
     assert!(max_mem >= single_mem);
 }
 
-
 // ── Additional Atomicity and Boundary Tests ──────────────────────────────────
 
 #[test]

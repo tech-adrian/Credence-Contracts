@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use crate::timelock::{Timelock, TimelockClient};
-use soroban_sdk::{testutils::Address as _, Address, Env, Symbol};
 use credence_errors::ContractError;
+use soroban_sdk::{testutils::Address as _, Address, Env, Symbol};
 
 #[test]
 fn test_pause_unpause() {
@@ -25,7 +25,10 @@ fn test_pause_unpause() {
 
     // Try a mutating action while paused
     let res = client.try_update_min_delay(&7200);
-    assert_eq!(res.err(), Some(soroban_sdk::Val::from_u32(ContractError::ContractPaused as u32).into()));
+    assert_eq!(
+        res.err(),
+        Some(soroban_sdk::Val::from_u32(ContractError::ContractPaused as u32).into())
+    );
 
     // Unpause
     client.unpause(&admin);

@@ -171,7 +171,9 @@ impl DisputeContract {
         env.storage()
             .instance()
             .set(&DataKey::PauseSignerCount, &0_u32);
-        env.storage().instance().set(&DataKey::PauseThreshold, &0_u32);
+        env.storage()
+            .instance()
+            .set(&DataKey::PauseThreshold, &0_u32);
         env.storage()
             .instance()
             .set(&DataKey::PauseProposalCounter, &0_u64);
