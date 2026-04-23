@@ -5,7 +5,7 @@ pub mod pausable;
 #[cfg(test)]
 mod test_ownership_transfer;
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, Vec};
 
 /// Admin role hierarchy levels
 #[contracttype]

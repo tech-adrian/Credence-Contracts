@@ -1,5 +1,5 @@
 use crate::*;
-use soroban_sdk::{Address, Env, String};
+use soroban_sdk::{Address, Env};
 
 #[cfg(test)]
 mod immutable_config_tests {
@@ -14,7 +14,7 @@ mod immutable_config_tests {
     fn test_config_requires_initialization() {
         let env = Env::default();
         let contract = create_contract();
-        let contract_address = env.register(AdminContract, ());
+        let contract_address = env.register_contract(None, AdminContract);
 
         env.mock_all_auths();
         
@@ -34,7 +34,7 @@ mod immutable_config_tests {
         let env = Env::default();
         let contract = create_contract();
         let super_admin = Address::generate(&env);
-        let contract_address = env.register(AdminContract, ());
+        let contract_address = env.register_contract(None, AdminContract);
 
         env.mock_all_auths();
 
@@ -51,7 +51,7 @@ mod immutable_config_tests {
     fn test_admin_config_requires_initialization() {
         let env = Env::default();
         let contract = create_contract();
-        let contract_address = env.register(AdminContract, ());
+        let contract_address = env.register_contract(None, AdminContract);
         let admin = Address::generate(&env);
 
         env.mock_all_auths();
@@ -72,7 +72,7 @@ mod immutable_config_tests {
         let env = Env::default();
         let contract = create_contract();
         let super_admin = Address::generate(&env);
-        let contract_address = env.register(AdminContract, ());
+        let contract_address = env.register_contract(None, AdminContract);
 
         env.mock_all_auths();
 
@@ -89,7 +89,7 @@ mod immutable_config_tests {
         let env = Env::default();
         let contract = create_contract();
         let super_admin = Address::generate(&env);
-        let contract_address = env.register(AdminContract, ());
+        let contract_address = env.register_contract(None, AdminContract);
 
         env.mock_all_auths();
 

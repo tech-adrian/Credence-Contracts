@@ -13,7 +13,7 @@ mod ownership_transfer_tests {
     fn setup_contract(env: &Env) -> (Address, Address) {
         let contract = create_contract();
         let super_admin = Address::generate(env);
-        let contract_address = env.register(AdminContract, ());
+        let contract_address = env.register_contract(None, AdminContract);
 
         env.mock_all_auths();
         env.as_contract(&contract_address, || {
@@ -27,7 +27,7 @@ mod ownership_transfer_tests {
         let contract = create_contract();
         let super_admin_1 = Address::generate(env);
         let super_admin_2 = Address::generate(env);
-        let contract_address = env.register(AdminContract, ());
+        let contract_address = env.register_contract(None, AdminContract);
 
         env.mock_all_auths();
         env.as_contract(&contract_address, || {
@@ -196,7 +196,7 @@ mod ownership_transfer_tests {
         let super_admin_1 = Address::generate(&env);
         let super_admin_2 = Address::generate(&env);
         let unauthorized_address = Address::generate(&env);
-        let contract_address = env.register(AdminContract, ());
+        let contract_address = env.register_contract(None, AdminContract);
 
         env.mock_all_auths();
         env.as_contract(&contract_address, || {
@@ -275,7 +275,7 @@ mod ownership_transfer_tests {
         let contract = create_contract();
         let super_admin = Address::generate(&env);
         let regular_admin = Address::generate(&env);
-        let contract_address = env.register(AdminContract, ());
+        let contract_address = env.register_contract(None, AdminContract);
 
         env.mock_all_auths();
         env.as_contract(&contract_address, || {
@@ -354,7 +354,7 @@ mod ownership_transfer_tests {
         let super_admin_1 = Address::generate(&env);
         let super_admin_2 = Address::generate(&env);
         let super_admin_3 = Address::generate(&env);
-        let contract_address = env.register(AdminContract, ());
+        let contract_address = env.register_contract(None, AdminContract);
 
         env.mock_all_auths();
         env.as_contract(&contract_address, || {
@@ -430,7 +430,7 @@ mod ownership_transfer_tests {
         let super_admin_1 = Address::generate(&env);
         let super_admin_2 = Address::generate(&env);
         let super_admin_3 = Address::generate(&env);
-        let contract_address = env.register(AdminContract, ());
+        let contract_address = env.register_contract(None, AdminContract);
 
         env.mock_all_auths();
         env.as_contract(&contract_address, || {

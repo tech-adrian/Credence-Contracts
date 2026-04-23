@@ -13,7 +13,7 @@ mod comprehensive_tests {
     fn setup_with_limits(env: &Env, min_admins: u32, max_admins: u32) -> (Address, Address) {
         let contract = create_contract();
         let super_admin = Address::generate(env);
-        let contract_address = env.register(AdminContract, ());
+        let contract_address = env.register_contract(None, AdminContract);
 
         env.mock_all_auths();
 
@@ -92,7 +92,7 @@ mod comprehensive_tests {
         let env = Env::default();
         let contract = create_contract();
         let super_admin = Address::generate(&env);
-        let contract_address = env.register(AdminContract, ());
+        let contract_address = env.register_contract(None, AdminContract);
 
         env.mock_all_auths();
         env.as_contract(&contract_address, || {
@@ -106,7 +106,7 @@ mod comprehensive_tests {
         let env = Env::default();
         let contract = create_contract();
         let super_admin = Address::generate(&env);
-        let contract_address = env.register(AdminContract, ());
+        let contract_address = env.register_contract(None, AdminContract);
 
         env.mock_all_auths();
         env.as_contract(&contract_address, || {

@@ -7,7 +7,7 @@ mod pausable_tests {
 
     fn setup() -> (Env, AdminContractClient<'static>, Address) {
         let e = Env::default();
-        let contract_id = e.register(AdminContract, ());
+        let contract_id = e.register_contract(None, AdminContract);
         let client = AdminContractClient::new(&e, &contract_id);
         let super_admin = Address::generate(&e);
         e.mock_all_auths();
