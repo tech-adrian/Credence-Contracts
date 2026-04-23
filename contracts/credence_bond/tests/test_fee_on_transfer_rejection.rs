@@ -15,10 +15,10 @@ fn setup_with_standard_token(
     env.mock_all_auths();
 
     let contract_id = env.register(CredenceBond, ());
-    let client = CredenceBondClient::new(env, &contract_id);
+    let client = CredenceBondClient::new(&env, &contract_id);
 
-    let admin = Address::generate(env);
-    let user = Address::generate(env);
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
     let token_id = env
         .register_stellar_asset_contract_v2(admin.clone())
         .address();
@@ -68,12 +68,12 @@ fn standard_token_withdrawal_works() {
 
     // Request withdrawal (for rolling bond)
     env.mock_all_auths();
-    client.request_withdrawal(&user);
+    client.request_withdrawal();
 
     // Withdraw after cooldown for rolling bonds
     env.ledger().set_timestamp(env.ledger().timestamp() + 1_000);
     env.mock_all_auths();
-    let withdrawn_bond = client.withdraw_bond(&user, &amount);
+    let withdrawn_bond = client.withdraw_bond(&amount);
     assert!(!withdrawn_bond.active);
 }
 
@@ -112,10 +112,10 @@ fn bond_rejects_fee_on_transfer_token_on_create() {
     env.mock_all_auths();
 
     let contract_id = env.register(CredenceBond, ());
-    let client = CredenceBondClient::new(env, &contract_id);
+    let client = CredenceBondClient::new(&env, &contract_id);
 
-    let admin = Address::generate(env);
-    let user = Address::generate(env);
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
 
     client.initialize(&admin);
 

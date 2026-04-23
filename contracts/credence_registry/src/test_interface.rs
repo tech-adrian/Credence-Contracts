@@ -40,7 +40,7 @@ mod lying {
     }
 }
 
-fn setup(e: &Env) -> CredenceRegistryClient {
+fn setup(e: &Env) -> CredenceRegistryClient<'_> {
     let id = e.register(CredenceRegistry, ());
     let client = CredenceRegistryClient::new(e, &id);
     let admin = soroban_sdk::Address::generate(e);

@@ -103,7 +103,7 @@ fn test_rescue_native_success() {
 #[should_panic(expected = "Error(Contract, #100)")]
 fn test_rescue_native_unauthorized() {
     let e = Env::default();
-    let (client, admin) = setup(&e);
+    let (client, _admin) = setup(&e);
     let recipient = Address::generate(&e);
     let unauthorized = Address::generate(&e);
 
