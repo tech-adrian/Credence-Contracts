@@ -383,7 +383,8 @@ fn test_negative_min_liquidity_treated_as_zero() {
 #[test]
 fn test_large_balance_with_large_min_liquidity() {
     let e = Env::default();
-    let (client, _admin, signer, recipient) = setup_withdrawal_scenario(&e, i128::MAX / 2, i128::MAX / 4);
+    let (client, _admin, signer, recipient) =
+        setup_withdrawal_scenario(&e, i128::MAX / 2, i128::MAX / 4);
 
     // Can withdraw up to the floor
     let withdraw_amount = (i128::MAX / 2) - (i128::MAX / 4);
